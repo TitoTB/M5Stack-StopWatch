@@ -61,7 +61,7 @@ stopwatch_power:
 binary_sensor:
   - platform: gpio
     id: button_a
-    name: "StopWatch Button A"
+    name: "Yellow Button"
     pin:
       number: GPIO2
       mode:
@@ -74,7 +74,7 @@ binary_sensor:
 
   - platform: gpio
     id: button_b
-    name: "StopWatch Button B"
+    name: "Blue Button"
     pin:
       number: GPIO1
       mode:
@@ -88,79 +88,83 @@ binary_sensor:
 switch:
   - platform: template
     id: stopwatch_screen
-    name: "StopWatch Screen"
+    name: "Display"
+    icon: mdi:circle-outline
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     turn_on_action:
       - lambda: |-
           id(screen_enabled) = true;
+          id(stopwatch_display).set_brightness(180);
     turn_off_action:
       - lambda: |-
           id(screen_enabled) = false;
+          id(stopwatch_display).set_brightness(0);
 
-motion:
-  - platform: bmi270
-    id: stopwatch_imu
-    i2c_id: sys_i2c
-    address: 0x68
-    update_interval: 500ms
-    accelerometer_range: 4G
-    gyroscope_range: 2000DPS
+#motion:
+#  - platform: bmi270
+#    id: stopwatch_imu
+#    i2c_id: sys_i2c
+#    address: 0x68
+#    update_interval: 500ms
+#    accelerometer_range: 4G
+#    gyroscope_range: 2000DPS
 
-sensor:
-  - platform: motion
-    motion_id: stopwatch_imu
-    type: acceleration_x
-    id: imu_accel_x
-    internal: true
-    accuracy_decimals: 3
-  - platform: motion
-    motion_id: stopwatch_imu
-    type: acceleration_y
-    id: imu_accel_y
-    internal: true
-    accuracy_decimals: 3
-  - platform: motion
-    motion_id: stopwatch_imu
-    type: acceleration_z
-    id: imu_accel_z
-    internal: true
-    accuracy_decimals: 3
-  - platform: motion
-    motion_id: stopwatch_imu
-    type: angular_rate_x
-    id: imu_gyro_x
-    internal: true
-    accuracy_decimals: 2
-  - platform: motion
-    motion_id: stopwatch_imu
-    type: angular_rate_y
-    id: imu_gyro_y
-    internal: true
-    accuracy_decimals: 2
-  - platform: motion
-    motion_id: stopwatch_imu
-    type: angular_rate_z
-    id: imu_gyro_z
-    internal: true
-    accuracy_decimals: 2
-  - platform: motion
-    motion_id: stopwatch_imu
-    type: roll
-    id: imu_roll
-    internal: true
-    accuracy_decimals: 1
-  - platform: motion
-    motion_id: stopwatch_imu
-    type: pitch
-    id: imu_pitch
-    internal: true
-    accuracy_decimals: 1
+#sensor:
+#  - platform: motion
+#    motion_id: stopwatch_imu
+#    type: acceleration_x
+#    id: imu_accel_x
+#    internal: true
+#    accuracy_decimals: 3
+#  - platform: motion
+#    motion_id: stopwatch_imu
+#    type: acceleration_y
+#    id: imu_accel_y
+#    internal: true
+#    accuracy_decimals: 3
+#  - platform: motion
+#    motion_id: stopwatch_imu
+#    type: acceleration_z
+#    id: imu_accel_z
+#    internal: true
+#    accuracy_decimals: 3
+#  - platform: motion
+#    motion_id: stopwatch_imu
+#    type: angular_rate_x
+#    id: imu_gyro_x
+#    internal: true
+#    accuracy_decimals: 2
+#  - platform: motion
+#    motion_id: stopwatch_imu
+#    type: angular_rate_y
+#    id: imu_gyro_y
+#    internal: true
+#    accuracy_decimals: 2
+#  - platform: motion
+#    motion_id: stopwatch_imu
+#    type: angular_rate_z
+#    id: imu_gyro_z
+#    internal: true
+#    accuracy_decimals: 2
+#  - platform: motion
+#    motion_id: stopwatch_imu
+#    type: roll
+#    id: imu_roll
+#    internal: true
+#    accuracy_decimals: 1
+#  - platform: motion
+#    motion_id: stopwatch_imu
+#    type: pitch
+#    id: imu_pitch
+#    internal: true
+#    accuracy_decimals: 1
 
 button:
   - platform: template
     id: stopwatch_vibrate_1s
-    name: "StopWatch Vibrate 1s"
+    name: "Vibrate"
+    icon: mdi:vibrate
     on_press:
       - lambda: |-
           id(display_power).set_vibration(1.0f);
@@ -187,7 +191,7 @@ display:
     bus_mode: quad
     cs_pin: GPIO39
     dimensions:
-      width: 466
+      width: 468
       height: 466
     color_order: rgb
     invert_colors: false
@@ -201,33 +205,20 @@ display:
 
       auto white = Color(255, 255, 255);
       auto cyan = Color(0, 220, 255);
-      auto green = Color(50, 255, 150);
       auto gray = Color(120, 120, 120);
       auto dim = Color(35, 35, 35);
 
       it.fill(Color::BLACK);
-      it.filled_rectangle(0, 0, 466, 466, Color::BLACK);
+      it.filled_rectangle(0, 0, 468, 466, Color::BLACK);
 
-      it.print(233, 28, id(font_title), cyan, display::TextAlign::CENTER, "BMI270 IMU");
-      it.line(44, 68, 422, 68, dim);
-      it.line(233, 92, 233, 398, dim);
+      it.print(234, 54, id(font_title), cyan, display::TextAlign::CENTER, "StopWatch");
+      it.line(54, 96, 414, 96, dim);
 
-      it.print(54, 96, id(font_label), gray, "ACCEL g");
-      it.printf(54, 132, id(font_value), white, "X % .3f", id(imu_accel_x).state);
-      it.printf(54, 170, id(font_value), white, "Y % .3f", id(imu_accel_y).state);
-      it.printf(54, 208, id(font_value), white, "Z % .3f", id(imu_accel_z).state);
+      it.print(234, 150, id(font_label), gray, display::TextAlign::CENTER, "Home Assistant");
+      it.print(234, 194, id(font_value), white, display::TextAlign::CENTER, "Online");
 
-      it.print(54, 268, id(font_label), gray, "ANGLE");
-      it.printf(54, 304, id(font_value), green, "R % .1f", id(imu_roll).state);
-      it.printf(54, 342, id(font_value), green, "P % .1f", id(imu_pitch).state);
-
-      it.print(262, 96, id(font_label), gray, "GYRO deg/s");
-      it.printf(262, 132, id(font_value), white, "X % .1f", id(imu_gyro_x).state);
-      it.printf(262, 170, id(font_value), white, "Y % .1f", id(imu_gyro_y).state);
-      it.printf(262, 208, id(font_value), white, "Z % .1f", id(imu_gyro_z).state);
-
-      it.print(262, 268, id(font_label), gray, "SCREEN");
-      it.print(262, 304, id(font_value), green, "ON");
+      it.print(234, 284, id(font_label), gray, display::TextAlign::CENTER, "Buttons, touch and vibration");
+      it.print(234, 326, id(font_value), white, display::TextAlign::CENTER, "Ready");
 
 font:
   - file: "gfonts://Roboto"
