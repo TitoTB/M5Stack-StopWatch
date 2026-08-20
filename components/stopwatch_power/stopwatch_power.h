@@ -14,6 +14,7 @@ class StopWatchPowerComponent : public Component, public i2c::I2CDevice {
   void set_l3b_pin(uint8_t pin) { this->l3b_pin_ = pin; }
   void set_oled_reset_pin(uint8_t pin) { this->oled_reset_pin_ = pin; }
   void set_reset_pulse(bool reset_pulse) { this->reset_pulse_ = reset_pulse; }
+  void set_speaker_amp(bool speaker_amp) { this->speaker_amp_ = speaker_amp; }
   void set_vibration(float level);
 
  protected:
@@ -28,6 +29,7 @@ class StopWatchPowerComponent : public Component, public i2c::I2CDevice {
   uint8_t l3b_pin_{7};
   uint8_t oled_reset_pin_{4};
   bool reset_pulse_{true};
+  bool speaker_amp_{false};
 };
 
 }  // namespace esphome::stopwatch_power

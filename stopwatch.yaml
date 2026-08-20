@@ -57,6 +57,7 @@ stopwatch_power:
   l3b_pin: 7
   oled_reset_pin: 4
   reset_pulse: true
+  speaker_amp: true
 
 stopwatch_battery:
   id: battery_monitor
@@ -181,6 +182,58 @@ button:
       - delay: 1s
       - lambda: |-
           id(display_power).set_vibration(0.0f);
+
+i2s_audio:
+  - id: audio_bus
+    i2s_lrclk_pin: GPIO15
+    i2s_bclk_pin: GPIO17
+    i2s_mclk_pin: GPIO18
+
+audio_dac:
+  - platform: es8311
+    id: audio_codec
+    i2c_id: sys_i2c
+    address: 0x18
+    bits_per_sample: 16bit
+    sample_rate: 16000
+    use_mclk: true
+    use_microphone: true
+    mic_gain: 42DB
+
+microphone:
+  - platform: i2s_audio
+    id: stopwatch_microphone
+    i2s_audio_id: audio_bus
+    adc_type: external
+    i2s_din_pin: GPIO16
+    bits_per_sample: 16bit
+    sample_rate: 16000
+    channel: left
+    pdm: false
+
+speaker:
+  - platform: i2s_audio
+    id: stopwatch_speaker
+    i2s_audio_id: audio_bus
+    dac_type: external
+    audio_dac: audio_codec
+    i2s_dout_pin: GPIO21
+    bits_per_sample: 16bit
+    sample_rate: 16000
+    channel: left
+
+media_player:
+  - platform: speaker
+    id: stopwatch_media_player
+    name: "Speaker"
+    icon: mdi:speaker
+    volume_initial: 50%
+    volume_max: 80%
+    announcement_pipeline:
+      speaker: stopwatch_speaker
+      format: FLAC
+      sample_rate: 16000
+      num_channels: 1
 
 spi:
   id: oled_qspi

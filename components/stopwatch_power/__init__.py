@@ -14,6 +14,7 @@ StopWatchPowerComponent = stopwatch_power_ns.class_(
 CONF_L3B_PIN = "l3b_pin"
 CONF_OLED_RESET_PIN = "oled_reset_pin"
 CONF_RESET_PULSE = "reset_pulse"
+CONF_SPEAKER_AMP = "speaker_amp"
 
 CONFIG_SCHEMA = (
     cv.Schema(
@@ -22,6 +23,7 @@ CONFIG_SCHEMA = (
             cv.Optional(CONF_L3B_PIN, default=7): cv.int_range(min=0, max=13),
             cv.Optional(CONF_OLED_RESET_PIN, default=4): cv.int_range(min=0, max=13),
             cv.Optional(CONF_RESET_PULSE, default=True): cv.boolean,
+            cv.Optional(CONF_SPEAKER_AMP, default=False): cv.boolean,
         }
     )
     .extend(cv.COMPONENT_SCHEMA)
@@ -37,3 +39,4 @@ async def to_code(config):
     cg.add(var.set_l3b_pin(config[CONF_L3B_PIN]))
     cg.add(var.set_oled_reset_pin(config[CONF_OLED_RESET_PIN]))
     cg.add(var.set_reset_pulse(config[CONF_RESET_PULSE]))
+    cg.add(var.set_speaker_amp(config[CONF_SPEAKER_AMP]))

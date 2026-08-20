@@ -161,7 +161,7 @@ void StopWatchPowerComponent::setup() {
   bool ok = true;
   ok &= this->set_output_pin_(7, true);   // gpio8 / PYB_L3B_EN: AMOLED and 3V3_L3B rail.
   ok &= this->set_output_pin_(3, true);   // gpio4 / PYB_TP_RST: touch reset high.
-  ok &= this->set_output_pin_(9, false);  // gpio10 / PYB_SPK_EN: speaker amp disabled.
+  ok &= this->set_output_pin_(9, this->speaker_amp_);  // gpio10 / PYB_SPK_EN: AW8737A speaker amp.
   ok &= this->set_output_pin_(4, true);   // gpio5 / PYB_OLED_RST: AMOLED reset high.
   ok &= this->set_output_pin_(0, false);  // gpio1 / PYB_MUX_CTR: rear bus in UART mode.
   ok &= this->set_output_pin_(2, true);   // gpio3 / PYB_AU_EN: audio rail enabled.
@@ -195,6 +195,7 @@ void StopWatchPowerComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  L3B power pin: %u", this->l3b_pin_);
   ESP_LOGCONFIG(TAG, "  OLED reset pin: %u", this->oled_reset_pin_);
   ESP_LOGCONFIG(TAG, "  Reset pulse: %s", TRUEFALSE(this->reset_pulse_));
+  ESP_LOGCONFIG(TAG, "  Speaker amp: %s", ONOFF(this->speaker_amp_));
   if (this->is_failed()) {
     ESP_LOGE(TAG, "  Component failed; check whether M5IOE1 appears in the I2C scan");
   }
