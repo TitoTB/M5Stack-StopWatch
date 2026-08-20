@@ -39,8 +39,8 @@ globals:
     initial_value: "true"
 
 external_components:
-  - source: github://TitoTB/M5Stack-StopWatch@2695c96acd01d0e918ef339899b14b97b42b898d
-    components: [stopwatch_power]
+  - source: github://TitoTB/M5Stack-StopWatch@c70fe63baf3455a567dddeaeb5146470015e91a3
+    components: [stopwatch_power, stopwatch_battery]
     refresh: 1s
 
 i2c:
@@ -57,6 +57,16 @@ stopwatch_power:
   l3b_pin: 7
   oled_reset_pin: 4
   reset_pulse: true
+
+stopwatch_battery:
+  id: battery_monitor
+  i2c_id: sys_i2c
+  address: 0x6E
+  update_interval: 30s
+  voltage:
+    name: "Battery Voltage"
+  level:
+    name: "Battery"
 
 binary_sensor:
   - platform: gpio
@@ -191,8 +201,8 @@ display:
     bus_mode: quad
     cs_pin: GPIO39
     dimensions:
-      width: 468
-      height: 466
+      width: 480
+      height: 480
     color_order: rgb
     invert_colors: false
     brightness: 180
@@ -209,16 +219,16 @@ display:
       auto dim = Color(35, 35, 35);
 
       it.fill(Color::BLACK);
-      it.filled_rectangle(0, 0, 468, 466, Color::BLACK);
+      it.filled_rectangle(0, 0, 480, 480, Color::BLACK);
 
-      it.print(234, 54, id(font_title), cyan, display::TextAlign::CENTER, "StopWatch");
-      it.line(54, 96, 414, 96, dim);
+      it.print(240, 54, id(font_title), cyan, display::TextAlign::CENTER, "StopWatch");
+      it.line(54, 96, 426, 96, dim);
 
-      it.print(234, 150, id(font_label), gray, display::TextAlign::CENTER, "Home Assistant");
-      it.print(234, 194, id(font_value), white, display::TextAlign::CENTER, "Online");
+      it.print(240, 150, id(font_label), gray, display::TextAlign::CENTER, "Home Assistant");
+      it.print(240, 194, id(font_value), white, display::TextAlign::CENTER, "Online");
 
-      it.print(234, 284, id(font_label), gray, display::TextAlign::CENTER, "Buttons, touch and vibration");
-      it.print(234, 326, id(font_value), white, display::TextAlign::CENTER, "Ready");
+      it.print(240, 284, id(font_label), gray, display::TextAlign::CENTER, "Buttons, touch and vibration");
+      it.print(240, 326, id(font_value), white, display::TextAlign::CENTER, "Ready");
 
 font:
   - file: "gfonts://Roboto"
