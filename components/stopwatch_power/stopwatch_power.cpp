@@ -12,6 +12,7 @@ static constexpr uint8_t REG_VERSION = 0x02;
 static constexpr uint8_t REG_GPIO_MODE_L = 0x03;
 static constexpr uint8_t REG_GPIO_OUTPUT_L = 0x05;
 static constexpr uint8_t REG_GPIO_DRIVE_L = 0x13;
+static constexpr uint8_t REG_PWM1_DUTY_L = 0x1B;
 static constexpr uint8_t REG_I2C_CFG = 0x23;
 static constexpr uint8_t REG_PWM_FREQ_L = 0x25;
 
@@ -86,6 +87,46 @@ bool StopWatchPowerComponent::set_output_pin_(uint8_t pin, bool value) {
          this->bit_write_(output_reg, bit, value);
 }
 
+bool StopWatchPowerComponent::write_pwm1_duty_(uint16_t duty12, bool enable) {
+  duty12 &= 0x0FFF;
+  uint8_t data[2] = {
+      uint8_t(duty12 & 0xFF),
+      uint8_t((duty12 >> 8) | (enable ? 0x80 : 0x00)),
+  };
+
+  for (uint8_t attempt = 0; attempt < 3; attempt++) {
+    if (this->write_bytes(REG_PWM1_DUTY_L, data, 2)) {
+      delayMicroseconds(500);
+      return true;
+    }
+    delay(20);
+  }
+  ESP_LOGE(TAG, "Failed to write M5IOE1 PWM1 duty");
+  return false;
+}
+
+void StopWatchPowerComponent::set_vibration(float level) {
+  if (this->is_failed()) {
+    return;
+  }
+
+  if (level < 0.0f) {
+    level = 0.0f;
+  } else if (level > 1.0f) {
+    level = 1.0f;
+  }
+
+  if (level <= 0.0f) {
+    this->write_pwm1_duty_(0, false);
+    this->set_output_pin_(8, false);
+    return;
+  }
+
+  this->set_output_pin_(8, false);
+  const uint16_t duty12 = uint16_t(level * 4095.0f + 0.5f);
+  this->write_pwm1_duty_(duty12, true);
+}
+
 void StopWatchPowerComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up StopWatch display power...");
 
@@ -133,6 +174,7 @@ void StopWatchPowerComponent::setup() {
   if (!this->write_u16_(REG_PWM_FREQ_L, 5000)) {
     ESP_LOGW(TAG, "Failed to set M5IOE1 PWM frequency");
   }
+  this->set_vibration(0.0f);
 
   ESP_LOGI(TAG, "Enabled AMOLED/L3B power on M5IOE1 pin %u", this->l3b_pin_);
 
