@@ -57,7 +57,6 @@ stopwatch_power:
   l3b_pin: 7
   oled_reset_pin: 4
   reset_pulse: true
-  speaker_amp: true
 
 stopwatch_battery:
   id: battery_monitor
@@ -72,7 +71,7 @@ stopwatch_battery:
 binary_sensor:
   - platform: gpio
     id: button_a
-    name: "Yellow Button"
+    name: "Button Yellow"
     pin:
       number: GPIO2
       mode:
@@ -85,7 +84,7 @@ binary_sensor:
 
   - platform: gpio
     id: button_b
-    name: "Blue Button"
+    name: "Button Blue"
     pin:
       number: GPIO1
       mode:
