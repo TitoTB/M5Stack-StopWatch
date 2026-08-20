@@ -5,7 +5,6 @@ from esphome.const import (
     CONF_ID,
     DEVICE_CLASS_BATTERY,
     DEVICE_CLASS_VOLTAGE,
-    ICON_BATTERY,
     STATE_CLASS_MEASUREMENT,
     UNIT_PERCENT,
     UNIT_VOLT,
@@ -37,7 +36,6 @@ CONFIG_SCHEMA = (
                 accuracy_decimals=0,
                 device_class=DEVICE_CLASS_BATTERY,
                 state_class=STATE_CLASS_MEASUREMENT,
-                icon=ICON_BATTERY,
             ),
         }
     )
