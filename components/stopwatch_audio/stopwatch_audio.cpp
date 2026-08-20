@@ -19,7 +19,7 @@ bool StopWatchAudioComponent::write_u8_(uint8_t reg, uint8_t value) {
   return false;
 }
 
-bool StopWatchAudioComponent::apply_output_setup_() {
+bool StopWatchAudioComponent::apply_speaker_setup_() {
   bool ok = true;
   ok &= this->write_u8_(0x00, 0x80);  // Reset / CSM power on.
   ok &= this->write_u8_(0x01, 0xB5);  // Clock manager: MCLK=BCLK.
@@ -32,10 +32,41 @@ bool StopWatchAudioComponent::apply_output_setup_() {
   return ok;
 }
 
+bool StopWatchAudioComponent::apply_microphone_setup_() {
+  bool ok = true;
+  ok &= this->write_u8_(0x00, 0x80);  // Reset / CSM power on.
+  ok &= this->write_u8_(0x01, 0xBA);  // Clock manager: MCLK=BCLK, ADC path.
+  ok &= this->write_u8_(0x02, 0x18);  // Clock manager: MULT_PRE=3.
+  ok &= this->write_u8_(0x0D, 0x01);  // Power up analog circuitry.
+  ok &= this->write_u8_(0x0E, 0x02);  // Enable analog PGA and ADC modulator.
+  ok &= this->write_u8_(0x14, 0x10);  // Select Mic1p-Mic1n, minimum PGA gain.
+  ok &= this->write_u8_(0x17, 0xFF);  // ADC volume, max gain.
+  ok &= this->write_u8_(0x1C, 0x6A);  // Bypass ADC EQ and cancel DC offset.
+  return ok;
+}
+
+void StopWatchAudioComponent::configure_speaker() {
+  if (this->is_failed()) {
+    return;
+  }
+  if (this->apply_speaker_setup_()) {
+    ESP_LOGD(TAG, "ES8311 speaker path configured");
+  }
+}
+
+void StopWatchAudioComponent::configure_microphone() {
+  if (this->is_failed()) {
+    return;
+  }
+  if (this->apply_microphone_setup_()) {
+    ESP_LOGD(TAG, "ES8311 microphone path configured");
+  }
+}
+
 void StopWatchAudioComponent::setup() {
   ESP_LOGCONFIG(TAG, "Setting up StopWatch ES8311 output path...");
 
-  if (!this->apply_output_setup_()) {
+  if (!this->apply_speaker_setup_()) {
     this->mark_failed();
     return;
   }

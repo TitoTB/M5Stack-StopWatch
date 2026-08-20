@@ -99,24 +99,48 @@ binary_sensor:
     filters:
       - delayed_on: 20ms
       - delayed_off: 20ms
-    on_click:
-      - min_length: 800ms
-        max_length: 5s
-        then:
-          - if:
-              condition:
-                voice_assistant.is_running:
-              then:
-                - voice_assistant.stop:
-              else:
-                - text_sensor.template.publish:
-                    id: assist_phase
-                    state: "Starting"
-                - text_sensor.template.publish:
-                    id: assist_text
-                    state: ""
-                - voice_assistant.start:
-                    silence_detection: true
+    on_press:
+      - if:
+          condition:
+            voice_assistant.is_running:
+          then:
+            - voice_assistant.stop:
+            - text_sensor.template.publish:
+                id: assist_phase
+                state: "Stopped"
+          else:
+            - text_sensor.template.publish:
+                id: assist_phase
+                state: "Hold..."
+            - text_sensor.template.publish:
+                id: assist_text
+                state: ""
+            - lambda: |-
+                id(display_power).set_vibration(0.35f);
+            - delay: 80ms
+            - lambda: |-
+                id(display_power).set_vibration(0.0f);
+            - delay: 800ms
+            - if:
+                condition:
+                  binary_sensor.is_on: button_b
+                then:
+                  - lambda: |-
+                      id(audio_codec_setup).configure_microphone();
+                  - text_sensor.template.publish:
+                      id: assist_phase
+                      state: "Starting"
+                  - lambda: |-
+                      id(display_power).set_vibration(1.0f);
+                  - delay: 120ms
+                  - lambda: |-
+                      id(display_power).set_vibration(0.0f);
+                  - voice_assistant.start:
+                      silence_detection: true
+                else:
+                  - text_sensor.template.publish:
+                      id: assist_phase
+                      state: "Ready"
 
 text_sensor:
   - platform: template
@@ -288,6 +312,11 @@ voice_assistant:
     - text_sensor.template.publish:
         id: assist_phase
         state: "Listening"
+    - lambda: |-
+        id(display_power).set_vibration(0.45f);
+    - delay: 60ms
+    - lambda: |-
+        id(display_power).set_vibration(0.0f);
   on_stt_vad_start:
     - text_sensor.template.publish:
         id: assist_phase
@@ -309,6 +338,8 @@ voice_assistant:
         id: assist_phase
         state: "Processing"
   on_tts_start:
+    - lambda: |-
+        id(audio_codec_setup).configure_speaker();
     - text_sensor.template.publish:
         id: assist_phase
         state: "Answering"
@@ -321,6 +352,8 @@ voice_assistant:
         id: assist_phase
         state: "Speaking"
   on_end:
+    - lambda: |-
+        id(audio_codec_setup).configure_speaker();
     - text_sensor.template.publish:
         id: assist_phase
         state: "Done"
@@ -329,6 +362,8 @@ voice_assistant:
         id: assist_phase
         state: "Ready"
   on_error:
+    - lambda: |-
+        id(audio_codec_setup).configure_speaker();
     - text_sensor.template.publish:
         id: assist_phase
         state: "Error"
