@@ -1,0 +1,85 @@
+# Board: Generic ESP32-S3 Board (Generic)
+# Definition: definitions/boards/generic-esp32s3/manifest.yaml
+
+esphome:
+  name: stopwatch
+  friendly_name: StopWatch
+
+esp32:
+  variant: esp32s3
+  framework:
+    type: esp-idf
+
+psram:
+  mode: octal
+  speed: 80MHz
+
+logger:
+
+api:
+  encryption:
+    key: "2qSYUUjKca/OGvnlDY+jClB+denlkYE8dul/P69DeSQ="
+
+ota:
+  - platform: esphome
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: StopWatch Fallback Hotspot
+    password: "K0zk4j1SIDNH"
+
+captive_portal:
+
+binary_sensor:
+  - platform: gpio
+    id: button_a
+    name: "StopWatch Button A"
+    pin:
+      number: GPIO2
+      mode:
+        input: true
+        pulldown: true
+    filters:
+      - delayed_on: 20ms
+      - delayed_off: 20ms
+
+  - platform: gpio
+    id: button_b
+    name: "StopWatch Button B"
+    pin:
+      number: GPIO1
+      mode:
+        input: true
+        pulldown: true
+    filters:
+      - delayed_on: 20ms
+      - delayed_off: 20ms
+
+spi:
+  id: oled_qspi
+  type: quad
+  clk_pin: GPIO40
+  data_pins:
+    - GPIO41
+    - GPIO42
+    - GPIO46
+    - GPIO45
+  interface: spi3
+
+display:
+  - platform: mipi_spi
+    id: stopwatch_display
+    spi_id: oled_qspi
+    model: CO5300
+    bus_mode: quad
+    cs_pin: GPIO39
+    dimensions:
+      width: 466
+      height: 466
+    color_order: rgb
+    invert_colors: false
+    brightness: 180
+    update_interval: 1s
+    show_test_card: true
