@@ -10,7 +10,7 @@ from esphome.const import (
     UNIT_VOLT,
 )
 
-DEPENDENCIES = ["i2c"]
+DEPENDENCIES = ["i2c", "sensor"]
 CODEOWNERS = ["@codex"]
 
 stopwatch_battery_ns = cg.esphome_ns.namespace("stopwatch_battery")
