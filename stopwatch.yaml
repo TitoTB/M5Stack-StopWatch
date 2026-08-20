@@ -17,8 +17,8 @@ psram:
 logger:
 
 api:
-  encryption:
-    key: "2qSYUUjKca/OGvnlDY+jClB+denlkYE8dul/P69DeSQ="
+#  encryption:
+#    key: "2qSYUUjKca/OGvnlDY+jClB+denlkYE8dul/P69DeSQ="
 
 ota:
   - platform: esphome
