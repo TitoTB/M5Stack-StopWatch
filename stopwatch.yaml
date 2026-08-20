@@ -35,6 +35,7 @@ captive_portal:
 external_components:
   - source: github://TitoTB/M5Stack-StopWatch@main
     components: [stopwatch_power]
+    refresh: 1s
 
 i2c:
   id: sys_i2c
@@ -104,3 +105,26 @@ display:
     brightness: 180
     update_interval: 1s
     show_test_card: true
+
+touchscreen:
+  - platform: cst816
+    id: stopwatch_touch
+    i2c_id: sys_i2c
+    display: stopwatch_display
+    interrupt_pin: GPIO13
+    skip_probe: false
+    on_touch:
+      - lambda: |-
+          ESP_LOGI("stopwatch_touch", "touch id=%d x=%d y=%d raw_x=%d raw_y=%d",
+                   touch.id, touch.x, touch.y, touch.x_raw, touch.y_raw);
+    on_update:
+      - lambda: |-
+          for (auto touch : touches) {
+            if (touch.state <= 2) {
+              ESP_LOGD("stopwatch_touch", "update id=%d state=%d x=%d y=%d raw_x=%d raw_y=%d",
+                       touch.id, touch.state, touch.x, touch.y, touch.x_raw, touch.y_raw);
+            }
+          }
+    on_release:
+      - lambda: |-
+          ESP_LOGI("stopwatch_touch", "release");
