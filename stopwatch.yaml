@@ -99,6 +99,39 @@ binary_sensor:
     filters:
       - delayed_on: 20ms
       - delayed_off: 20ms
+    on_click:
+      - min_length: 800ms
+        max_length: 5s
+        then:
+          - if:
+              condition:
+                voice_assistant.is_running:
+              then:
+                - voice_assistant.stop:
+              else:
+                - text_sensor.template.publish:
+                    id: assist_phase
+                    state: "Starting"
+                - text_sensor.template.publish:
+                    id: assist_text
+                    state: ""
+                - voice_assistant.start:
+                    silence_detection: true
+
+text_sensor:
+  - platform: template
+    id: assist_phase
+    internal: true
+    update_interval: never
+    lambda: |-
+      return {"Ready"};
+
+  - platform: template
+    id: assist_text
+    internal: true
+    update_interval: never
+    lambda: |-
+      return {""};
 
 switch:
   - platform: template
@@ -220,13 +253,89 @@ media_player:
     id: stopwatch_media_player
     name: "Speaker"
     icon: mdi:speaker
-    volume_initial: 50%
-    volume_max: 80%
+    volume_initial: 80%
+    volume_max: 100%
     announcement_pipeline:
       speaker: stopwatch_speaker
       format: FLAC
       sample_rate: 44100
       num_channels: 2
+
+voice_assistant:
+  id: home_assistant_voice
+  microphone:
+    microphone: stopwatch_microphone
+    channels: 0
+    gain_factor: 4
+  media_player: stopwatch_media_player
+  use_wake_word: false
+  noise_suppression_level: 2
+  auto_gain: 15dBFS
+  volume_multiplier: 1.0
+  on_client_connected:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Ready"
+  on_client_disconnected:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Disconnected"
+  on_start:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Starting"
+  on_listening:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Listening"
+  on_stt_vad_start:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Hearing voice"
+  on_stt_vad_end:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Processing speech"
+  on_stt_end:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Heard"
+    - text_sensor.template.publish:
+        id: assist_text
+        state: !lambda |-
+          return x;
+  on_intent_start:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Processing"
+  on_tts_start:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Answering"
+    - text_sensor.template.publish:
+        id: assist_text
+        state: !lambda |-
+          return x;
+  on_tts_end:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Speaking"
+  on_end:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Done"
+    - delay: 2s
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Ready"
+  on_error:
+    - text_sensor.template.publish:
+        id: assist_phase
+        state: "Error"
+    - text_sensor.template.publish:
+        id: assist_text
+        state: !lambda |-
+          return message;
 
 spi:
   id: oled_qspi
@@ -273,8 +382,16 @@ display:
       it.print(240, 150, id(font_label), gray, display::TextAlign::CENTER, "Home Assistant");
       it.print(240, 194, id(font_value), white, display::TextAlign::CENTER, "Online");
 
-      it.print(240, 284, id(font_label), gray, display::TextAlign::CENTER, "Buttons, touch and vibration");
-      it.print(240, 326, id(font_value), white, display::TextAlign::CENTER, "Ready");
+      it.print(240, 270, id(font_label), gray, display::TextAlign::CENTER, "Assistant");
+      it.print(240, 312, id(font_value), white, display::TextAlign::CENTER, id(assist_phase).state.c_str());
+
+      std::string assist_line = id(assist_text).state;
+      if (assist_line.size() > 34) {
+        assist_line = assist_line.substr(0, 34);
+      }
+      if (!assist_line.empty()) {
+        it.print(240, 360, id(font_small), gray, display::TextAlign::CENTER, assist_line.c_str());
+      }
 
 font:
   - file: "gfonts://Roboto"
@@ -286,6 +403,9 @@ font:
   - file: "gfonts://Roboto Mono"
     id: font_value
     size: 24
+  - file: "gfonts://Roboto"
+    id: font_small
+    size: 16
 
 touchscreen:
   - platform: cst816
