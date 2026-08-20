@@ -32,6 +32,27 @@ wifi:
 
 captive_portal:
 
+external_components:
+  - source:
+      type: local
+      path: components
+    components: [stopwatch_power]
+
+i2c:
+  id: sys_i2c
+  sda: GPIO47
+  scl: GPIO48
+  frequency: 400kHz
+  scan: true
+
+stopwatch_power:
+  id: display_power
+  i2c_id: sys_i2c
+  address: 0x4F
+  l3b_pin: 8
+  oled_reset_pin: 5
+  reset_pulse: true
+
 binary_sensor:
   - platform: gpio
     id: button_a
