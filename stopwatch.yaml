@@ -172,7 +172,7 @@ text_sensor:
 image:
   - platform: file
     id: radar_map
-    file: "assets/bg.jpg"
+    file: "https://raw.githubusercontent.com/TitoTB/M5Stack-StopWatch/main/assets/bg.jpg"
     resize: 720x720
     type: RGB565
     transparency: opaque
