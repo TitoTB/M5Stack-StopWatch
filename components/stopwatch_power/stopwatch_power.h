@@ -18,10 +18,11 @@ class StopWatchPowerComponent : public Component, public i2c::I2CDevice {
  protected:
   bool read_u16_(uint8_t reg, uint16_t *value);
   bool write_u16_(uint8_t reg, uint16_t value);
+  bool write_u8_(uint8_t reg, uint8_t value);
   bool set_output_pin_(uint8_t pin, bool value);
 
-  uint8_t l3b_pin_{8};
-  uint8_t oled_reset_pin_{5};
+  uint8_t l3b_pin_{7};
+  uint8_t oled_reset_pin_{4};
   bool reset_pulse_{true};
 };
 

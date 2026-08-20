@@ -33,24 +33,22 @@ wifi:
 captive_portal:
 
 external_components:
-  - source:
-      type: local
-      path: components
+  - source: github://TitoTB/M5Stack-StopWatch@main
     components: [stopwatch_power]
 
 i2c:
   id: sys_i2c
   sda: GPIO47
   scl: GPIO48
-  frequency: 400kHz
+  frequency: 100kHz
   scan: true
 
 stopwatch_power:
   id: display_power
   i2c_id: sys_i2c
   address: 0x4F
-  l3b_pin: 8
-  oled_reset_pin: 5
+  l3b_pin: 7
+  oled_reset_pin: 4
   reset_pulse: true
 
 binary_sensor:
@@ -61,7 +59,8 @@ binary_sensor:
       number: GPIO2
       mode:
         input: true
-        pulldown: true
+        pullup: true
+      inverted: true
     filters:
       - delayed_on: 20ms
       - delayed_off: 20ms
@@ -73,7 +72,8 @@ binary_sensor:
       number: GPIO1
       mode:
         input: true
-        pulldown: true
+        pullup: true
+      inverted: true
     filters:
       - delayed_on: 20ms
       - delayed_off: 20ms

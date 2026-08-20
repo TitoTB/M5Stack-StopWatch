@@ -19,8 +19,8 @@ CONFIG_SCHEMA = (
     cv.Schema(
         {
             cv.GenerateID(): cv.declare_id(StopWatchPowerComponent),
-            cv.Optional(CONF_L3B_PIN, default=8): cv.int_range(min=0, max=13),
-            cv.Optional(CONF_OLED_RESET_PIN, default=5): cv.int_range(min=0, max=13),
+            cv.Optional(CONF_L3B_PIN, default=7): cv.int_range(min=0, max=13),
+            cv.Optional(CONF_OLED_RESET_PIN, default=4): cv.int_range(min=0, max=13),
             cv.Optional(CONF_RESET_PULSE, default=True): cv.boolean,
         }
     )

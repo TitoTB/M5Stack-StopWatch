@@ -12,6 +12,8 @@ static constexpr uint8_t REG_VERSION = 0x02;
 static constexpr uint8_t REG_GPIO_MODE_L = 0x03;
 static constexpr uint8_t REG_GPIO_OUTPUT_L = 0x05;
 static constexpr uint8_t REG_GPIO_DRIVE_L = 0x13;
+static constexpr uint8_t REG_I2C_CFG = 0x23;
+static constexpr uint8_t REG_PWM_FREQ_L = 0x25;
 
 bool StopWatchPowerComponent::read_u16_(uint8_t reg, uint16_t *value) {
   uint8_t data[2]{};
@@ -25,6 +27,10 @@ bool StopWatchPowerComponent::read_u16_(uint8_t reg, uint16_t *value) {
 bool StopWatchPowerComponent::write_u16_(uint8_t reg, uint16_t value) {
   uint8_t data[2] = {uint8_t(value & 0xFF), uint8_t(value >> 8)};
   return this->write_bytes(reg, data, 2);
+}
+
+bool StopWatchPowerComponent::write_u8_(uint8_t reg, uint8_t value) {
+  return this->write_byte(reg, value);
 }
 
 bool StopWatchPowerComponent::set_output_pin_(uint8_t pin, bool value) {
@@ -83,10 +89,39 @@ void StopWatchPowerComponent::setup() {
 
   ESP_LOGI(TAG, "M5IOE1 UID: 0x%02X%02X, firmware: 0x%02X", uid[1], uid[0], version);
 
-  if (!this->set_output_pin_(this->l3b_pin_, true)) {
+  if (!this->write_u8_(REG_I2C_CFG, 0x00) || !this->write_u8_(REG_I2C_CFG, 0x00)) {
+    ESP_LOGE(TAG, "Failed to disable M5IOE1 I2C sleep");
     this->mark_failed();
     return;
   }
+
+  // Matches M5Unified's StopWatch bring-up order. Pin numbers are zero-based:
+  // gpio1=0, gpio3=2, gpio4=3, gpio5=4, gpio8=7, gpio9=8, gpio10=9.
+  static constexpr uint8_t output_pins[] = {8, 7, 9, 3, 4, 0, 2};
+  for (uint8_t pin : output_pins) {
+    if (!this->set_output_pin_(pin, false)) {
+      this->mark_failed();
+      return;
+    }
+  }
+
+  bool ok = true;
+  ok &= this->set_output_pin_(7, true);   // gpio8 / PYB_L3B_EN: AMOLED and 3V3_L3B rail.
+  ok &= this->set_output_pin_(3, true);   // gpio4 / PYB_TP_RST: touch reset high.
+  ok &= this->set_output_pin_(9, false);  // gpio10 / PYB_SPK_EN: speaker amp disabled.
+  ok &= this->set_output_pin_(4, true);   // gpio5 / PYB_OLED_RST: AMOLED reset high.
+  ok &= this->set_output_pin_(0, false);  // gpio1 / PYB_MUX_CTR: rear bus in UART mode.
+  ok &= this->set_output_pin_(2, true);   // gpio3 / PYB_AU_EN: audio rail enabled.
+
+  if (!ok) {
+    this->mark_failed();
+    return;
+  }
+
+  if (!this->write_u16_(REG_PWM_FREQ_L, 5000)) {
+    ESP_LOGW(TAG, "Failed to set M5IOE1 PWM frequency");
+  }
+
   ESP_LOGI(TAG, "Enabled AMOLED/L3B power on M5IOE1 pin %u", this->l3b_pin_);
 
   if (this->reset_pulse_) {
@@ -106,6 +141,9 @@ void StopWatchPowerComponent::dump_config() {
   ESP_LOGCONFIG(TAG, "  L3B power pin: %u", this->l3b_pin_);
   ESP_LOGCONFIG(TAG, "  OLED reset pin: %u", this->oled_reset_pin_);
   ESP_LOGCONFIG(TAG, "  Reset pulse: %s", TRUEFALSE(this->reset_pulse_));
+  if (this->is_failed()) {
+    ESP_LOGE(TAG, "  Component failed; check whether M5IOE1 appears in the I2C scan");
+  }
 }
 
 }  // namespace esphome::stopwatch_power
