@@ -40,7 +40,7 @@ globals:
 
 external_components:
   - source: github://TitoTB/M5Stack-StopWatch@main
-    components: [stopwatch_power, stopwatch_battery]
+    components: [stopwatch_power, stopwatch_battery, stopwatch_audio]
     refresh: 1s
 
 i2c:
@@ -67,6 +67,11 @@ stopwatch_battery:
     name: "Battery Voltage"
   level:
     name: "Battery"
+
+stopwatch_audio:
+  id: audio_codec_setup
+  i2c_id: sys_i2c
+  address: 0x18
 
 binary_sensor:
   - platform: gpio
@@ -188,17 +193,6 @@ i2s_audio:
     i2s_bclk_pin: GPIO17
     i2s_mclk_pin: GPIO18
 
-audio_dac:
-  - platform: es8311
-    id: audio_codec
-    i2c_id: sys_i2c
-    address: 0x18
-    bits_per_sample: 16bit
-    sample_rate: 16000
-    use_mclk: true
-    use_microphone: false
-    mic_gain: 42DB
-
 microphone:
   - platform: i2s_audio
     id: stopwatch_microphone
@@ -215,11 +209,11 @@ speaker:
     id: stopwatch_speaker
     i2s_audio_id: audio_bus
     dac_type: external
-    audio_dac: audio_codec
     i2s_dout_pin: GPIO21
     bits_per_sample: 16bit
-    sample_rate: 16000
-    channel: mono
+    sample_rate: 44100
+    mclk_multiple: 128
+    channel: stereo
 
 media_player:
   - platform: speaker
@@ -231,8 +225,8 @@ media_player:
     announcement_pipeline:
       speaker: stopwatch_speaker
       format: FLAC
-      sample_rate: 16000
-      num_channels: 1
+      sample_rate: 44100
+      num_channels: 2
 
 spi:
   id: oled_qspi
