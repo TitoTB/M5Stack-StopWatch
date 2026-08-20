@@ -74,7 +74,7 @@ stopwatch_battery:
   id: battery_monitor
   i2c_id: sys_i2c
   address: 0x6E
-  update_interval: 30s
+  update_interval: 30min
   voltage:
     name: "Battery Voltage"
   level:
