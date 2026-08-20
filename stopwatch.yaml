@@ -39,7 +39,7 @@ globals:
     initial_value: "true"
 
 external_components:
-  - source: github://TitoTB/M5Stack-StopWatch@main
+  - source: github://TitoTB/M5Stack-StopWatch@2695c96acd01d0e918ef339899b14b97b42b898d
     components: [stopwatch_power]
     refresh: 1s
 
