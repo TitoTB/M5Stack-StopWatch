@@ -37,18 +37,6 @@ globals:
     type: bool
     restore_value: true
     initial_value: "true"
-  - id: ui_page
-    type: int
-    restore_value: true
-    initial_value: "0"
-  - id: ui_from_page
-    type: int
-    restore_value: false
-    initial_value: "0"
-  - id: ui_nav_started
-    type: uint32_t
-    restore_value: false
-    initial_value: "0"
 
 external_components:
   - source: github://TitoTB/M5Stack-StopWatch@main
@@ -168,14 +156,6 @@ text_sensor:
     update_interval: never
     lambda: |-
       return {""};
-
-image:
-  - platform: file
-    id: radar_map
-    file: "https://raw.githubusercontent.com/TitoTB/M5Stack-StopWatch/main/assets/bg.jpg"
-    resize: 720x720
-    type: RGB565
-    transparency: opaque
 
 switch:
   - platform: template
@@ -416,7 +396,7 @@ display:
     color_order: rgb
     invert_colors: false
     brightness: 180
-    update_interval: 250ms
+    update_interval: 500ms
     lambda: |-
       if (!id(screen_enabled)) {
         it.fill(Color::BLACK);
@@ -424,108 +404,18 @@ display:
       }
 
       auto white = Color(255, 255, 255);
-      auto red = Color(255, 35, 58);
-      auto red_dim = Color(115, 12, 25);
-      auto green = Color(68, 255, 110);
-      auto grid = Color(36, 160, 62);
-      auto grid_dim = Color(22, 72, 38);
-      auto dark = Color(2, 18, 10);
-      auto yellow = Color(255, 230, 46);
-      auto yellow_dim = Color(105, 90, 12);
-
-      const int page = id(ui_page);
-      auto page_offset = [](int p, int &x, int &y) {
-        x = -120;
-        y = -120;
-        if (p == 1) {
-          y = 0;
-        } else if (p == 2) {
-          x = -240;
-        } else if (p == 3) {
-          y = -240;
-        } else if (p == 4) {
-          x = 0;
-        }
-      };
-      int from_x = -120;
-      int from_y = -120;
-      int to_x = -120;
-      int to_y = -120;
-      page_offset(id(ui_from_page), from_x, from_y);
-      page_offset(page, to_x, to_y);
-      uint32_t elapsed = millis() - id(ui_nav_started);
-      if (elapsed > 450) {
-        elapsed = 450;
-      }
-      const int map_x = from_x + ((to_x - from_x) * int(elapsed)) / 450;
-      const int map_y = from_y + ((to_y - from_y) * int(elapsed)) / 450;
-      const char *page_title = "HOME";
-      const char *page_text = "Radar central";
-
-      if (page == 1) {
-        page_title = "NORTH";
-        page_text = "Texto de prueba norte";
-      } else if (page == 2) {
-        page_title = "EAST";
-        page_text = "Texto de prueba este";
-      } else if (page == 3) {
-        page_title = "SOUTH";
-        page_text = "Texto de prueba sur";
-      } else if (page == 4) {
-        page_title = "WEST";
-        page_text = "Texto de prueba oeste";
-      }
+      auto cyan = Color(0, 220, 255);
+      auto gray = Color(120, 120, 120);
+      auto dim = Color(35, 35, 35);
 
       it.fill(Color::BLACK);
-      it.image(map_x, map_y, id(radar_map));
+      it.print(240, 200, id(font_title), cyan, display::TextAlign::CENTER, "Hello World");
+      it.line(92, 240, 388, 240, dim);
+      it.print(240, 282, id(font_label), gray, display::TextAlign::CENTER, "StopWatch");
 
-      for (int x = 0; x <= 480; x += 80) {
-        it.line(x, 0, x, 480, grid_dim);
+      if (id(assist_phase).state != "Ready") {
+        it.print(240, 332, id(font_small), white, display::TextAlign::CENTER, id(assist_phase).state.c_str());
       }
-      for (int y = 0; y <= 480; y += 80) {
-        it.line(0, y, 480, y, grid_dim);
-      }
-      it.line(0, 239, 480, 239, grid);
-      it.line(0, 240, 480, 240, grid);
-      it.line(239, 0, 239, 480, grid);
-      it.line(240, 0, 240, 480, grid);
-      it.circle(240, 240, 228, grid_dim);
-      it.circle(240, 240, 160, grid_dim);
-      it.circle(240, 240, 80, grid_dim);
-
-      const uint32_t ms = millis() % 2000;
-      const int pulse = ms < 1000 ? ms : 2000 - ms;
-      const bool bright = pulse > 420;
-      const auto arrow_color = bright ? red : red_dim;
-      const auto ball_color = bright ? yellow : yellow_dim;
-
-      if (page == 0) {
-        it.filled_triangle(240, 28, 217, 72, 263, 72, arrow_color);
-        it.filled_triangle(452, 240, 408, 217, 408, 263, arrow_color);
-        it.filled_triangle(240, 452, 217, 408, 263, 408, arrow_color);
-        it.filled_triangle(28, 240, 72, 217, 72, 263, arrow_color);
-
-        const int bx[] = {240, 218, 262, 226, 254, 235, 272};
-        const int by[] = {232, 252, 252, 220, 220, 276, 276};
-        for (int i = 0; i < 7; i++) {
-          it.filled_circle(bx[i], by[i], 11, ball_color);
-          if (bright) {
-            it.circle(bx[i], by[i], 14, Color(255, 250, 130));
-          }
-        }
-
-        it.print(240, 138, id(font_label), green, display::TextAlign::CENTER, "DRAGON RADAR");
-        it.print(240, 336, id(font_small), white, display::TextAlign::CENTER, id(assist_phase).state.c_str());
-      } else {
-        it.print(240, 170, id(font_title), green, display::TextAlign::CENTER, page_title);
-        it.print(240, 224, id(font_label), white, display::TextAlign::CENTER, page_text);
-        it.print(240, 300, id(font_small), Color(170, 255, 190), display::TextAlign::CENTER, "Tap center to return");
-        it.circle(240, 240, 54, green);
-        it.circle(240, 240, 58, grid_dim);
-      }
-
-      it.circle(240, 240, 239, dark);
-      it.circle(240, 240, 238, grid);
 
 font:
   - file: "gfonts://Roboto"
@@ -548,31 +438,3 @@ touchscreen:
     display: stopwatch_display
     interrupt_pin: GPIO13
     skip_probe: false
-    on_touch:
-      - lambda: |-
-          auto navigate = [&](int page) {
-            if (id(ui_page) == page) {
-              return;
-            }
-            id(ui_from_page) = id(ui_page);
-            id(ui_page) = page;
-            id(ui_nav_started) = millis();
-            id(display_power).set_vibration(0.4f);
-          };
-
-          if (id(ui_page) == 0) {
-            if (touch.y < 115 && touch.x > 150 && touch.x < 330) {
-              navigate(1);
-            } else if (touch.x > 365 && touch.y > 150 && touch.y < 330) {
-              navigate(2);
-            } else if (touch.y > 365 && touch.x > 150 && touch.x < 330) {
-              navigate(3);
-            } else if (touch.x < 115 && touch.y > 150 && touch.y < 330) {
-              navigate(4);
-            }
-          } else if (touch.x > 150 && touch.x < 330 && touch.y > 150 && touch.y < 330) {
-            navigate(0);
-          }
-      - delay: 60ms
-      - lambda: |-
-          id(display_power).set_vibration(0.0f);
