@@ -7,12 +7,14 @@ from esphome.components.mipi import (
     WRCTRLD,
     DriverChip,
 )
-import esphome.codegen as cg
 from esphome.components.mipi_spi.display import *  # noqa: F401,F403
-from esphome.components.mipi_spi.display import MODELS, to_code as mipi_spi_to_code
+from esphome.components.mipi_spi.display import MODELS
 from esphome.components.spi import TYPE_QUAD
 from esphome.const import CONF_MIRROR_X, CONF_MIRROR_Y
 
+
+AUTO_LOAD = ["mipi_spi"]
+DEPENDENCIES = ["spi"]
 
 MODELS["M5STACK-STOPWATCH"] = DriverChip(
     "M5STACK-STOPWATCH",
@@ -37,8 +39,3 @@ MODELS["M5STACK-STOPWATCH"] = DriverChip(
         (WCE, 0x00),
     ),
 )
-
-
-async def to_code(config):
-    cg.add_global(cg.RawStatement('#include "esphome/components/mipi_spi/mipi_spi.h"'))
-    await mipi_spi_to_code(config)
