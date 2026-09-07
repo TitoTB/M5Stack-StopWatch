@@ -7,7 +7,6 @@ esphome:
 
 esp32:
   variant: esp32s3
-  flash_size: 16MB
   framework:
     type: esp-idf
 
@@ -41,7 +40,7 @@ globals:
 
 external_components:
   - source: github://TitoTB/M5Stack-StopWatch@main
-    components: [stopwatch_power, stopwatch_battery, stopwatch_audio, stopwatch_mipi_spi]
+    components: [stopwatch_power, stopwatch_battery, stopwatch_audio]
     refresh: 1s
 
 i2c:
@@ -385,12 +384,15 @@ spi:
   interface: spi3
 
 display:
-  - platform: stopwatch_mipi_spi
+  - platform: mipi_spi
     id: stopwatch_display
     spi_id: oled_qspi
-    model: M5STACK-STOPWATCH
+    model: CO5300
     bus_mode: quad
     cs_pin: GPIO39
+    dimensions:
+      width: 480
+      height: 480
     color_order: rgb
     invert_colors: false
     brightness: 180
