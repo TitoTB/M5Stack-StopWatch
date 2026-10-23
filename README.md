@@ -1,6 +1,6 @@
-![Dragon Ball Radar built with an M5Stack StopWatch, alongside an illuminated Dragon Ball](assets/dragon-ball-radar.jpg)
-
 # Dragon Ball Radar (M5Stack StopWatch)
+
+![Dragon Ball Radar built with an M5Stack StopWatch, alongside an illuminated Dragon Ball](assets/dragon-ball-radar.jpg)
 
 A Dragon Ball-inspired smart home controller built with the **M5Stack StopWatch**, **ESPHome**, and **Home Assistant**. A green radar interface, a 3D-printed enclosure, and a Dragon Ball display bring the look of the series to your desk—with touch controls, a voice assistant, timers, and alarms.
 
