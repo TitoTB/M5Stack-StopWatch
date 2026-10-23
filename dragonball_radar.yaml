@@ -5,13 +5,61 @@ substitutions:
 
   name: dragon-ball-radar
   friendly_name: Dragon Ball Radar
-  background_image: https://raw.githubusercontent.com/TitoTB/M5Stack-StopWatch/refs/heads/main/assets/bg_db.png
-  
+
+  # Home Assistant entities controlled from the device list.
+  light_ceiling: light.ventilador_estudio
+  cover1: cover.estor_estudio_1
+  climate: climate.salon
+  fan_ceiling: fan.ventilador_estudio
+  printer_3d: switch.impresora_3d
+  background_image: https://raw.githubusercontent.com/TitoTB/M5Stack-StopWatch/refs/heads/main/assets/bg_db_lines.png
+  assist_image: https://raw.githubusercontent.com/TitoTB/M5Stack-StopWatch/refs/heads/main/assets/goku.png
+
+# Other settings
+# Otros ajustes
+
+  # First ~7 seconds of the MP3-to-RTTTL adaptation approved in the preview.
+  alarm_melody: "Dragon7s:d=8,o=5,b=142:4f,d#,16c,f,4p.,4f,d#,16c,f,4p.,16p,4a#,16a#,16p,16g#,16p,4a#.,16g#,16p,2f.,16c,16p,16d#,16p,f."
+  allowed_characters: " []¿?¡!#%'()+,-—_./:µ³°ªº0123456789ABCDEFGHIJKLMNÑOPQRSTUVWXYZabcdefghijklmnñopqrstuvwxyzáéíóúÁÉÍÓÚäëïöü"
+
 ################################################################################################################
 
 esphome:
   name: ${name}
   friendly_name: ${friendly_name}
+  on_boot:
+    priority: -100
+    then:
+
+      - script.execute:
+          id: devices_move
+          direction: 0
+      - script.execute: alarm_load_configuration
+      - script.execute: alarm_refresh
+      - script.execute: settings_refresh
+      - script.execute: settings_apply_volume
+      - logger.log:
+          level: INFO
+          format: "Inicio completado: controles HA de timer, alarma y ajustes"
+
+      ## Animation
+      ## Animación
+
+      - lambda: |-
+          lv_obj_t* obj = id(img_assist_status);
+          int32_t base_y = lv_obj_get_y(obj);
+          static lv_anim_t anim;
+          lv_anim_init(&anim);
+          lv_anim_set_var(&anim, obj);
+          lv_anim_set_exec_cb(&anim, [](void* o, int32_t v) {
+            lv_obj_set_y((lv_obj_t*)o, v);
+          });
+          lv_anim_set_values(&anim, base_y + 5, base_y + 20);
+          lv_anim_set_duration(&anim, 2200);
+          lv_anim_set_playback_duration(&anim, 2200);
+          lv_anim_set_repeat_count(&anim, LV_ANIM_REPEAT_INFINITE);
+          lv_anim_set_path_cb(&anim, lv_anim_path_ease_in_out);
+          lv_anim_start(&anim);
 
 esp32:
   variant: esp32s3
@@ -26,8 +74,8 @@ psram:
 logger:
 
 api:
-  encryption:
-    key: "2qSYUUjKca/OGvnlDY+jClB+denlkYE8dul/P69DeSQ="
+#  encryption:
+#    key: "2qSdfsgfrthhtu656u5hje42rgfth4"
 
 ota:
   - platform: esphome
@@ -37,7 +85,7 @@ wifi:
   password: !secret wifi_password
   ap:
     ssid: Dragon Ball Rad Fallback Hotspot
-    password: "OwvTffXxpk42"
+    password: "Ogfh46y46uk42"
 
 captive_portal:
 improv_serial:
@@ -61,6 +109,88 @@ binary_sensor:
       - delayed_on: 20ms
       - delayed_off: 20ms
 
+    on_press:
+      - lambda: |-
+          id(button_a_wake_only) = !id(screen_enabled);
+      - script.execute: screen_activity
+      - if:
+          condition:
+            lambda: return id(button_a_wake_only);
+          then:
+            - switch.turn_on: stopwatch_screen
+    on_release:
+      - script.execute: screen_activity
+    # Short press is handled on release; a long press never moves the list.
+    on_click:
+      min_length: 20ms
+      max_length: 699ms
+      then:
+        - if:
+            condition:
+              lambda: return !id(button_a_wake_only);
+            then:
+              - if:
+                  condition:
+                    lvgl.page.is_showing: page_home
+                  then:
+                    - lvgl.page.show: page_devices
+                  else:
+                    - if:
+                        condition:
+                          lvgl.page.is_showing: page_devices
+                        then:
+                          - script.execute:
+                              id: devices_move
+                              direction: -1
+                        else:
+                          - if:
+                              condition:
+                                lvgl.page.is_showing: page_alarm
+                              then:
+                                - script.execute:
+                                    id: alarm_adjust
+                                    field: !lambda return id(alarm_edit_field);
+                                    direction: -1
+                              else:
+                                - if:
+                                    condition:
+                                      lvgl.page.is_showing: page_settings
+                                    then:
+                                      - script.execute:
+                                          id: settings_move
+                                          direction: -1
+    on_multi_click:
+      - timing:
+          - ON for at least 700ms
+        invalid_cooldown: 0ms
+        then:
+          - if:
+              condition:
+                lambda: return !id(button_a_wake_only);
+              then:
+                - if:
+                    condition:
+                      lvgl.page.is_showing: page_devices
+                    then:
+                      - lvgl.page.show: page_home
+                    else:
+                      - if:
+                          condition:
+                            lvgl.page.is_showing: page_home
+                          then:
+                            - script.execute: alarm_enter
+                          else:
+                            - if:
+                                condition:
+                                  lvgl.page.is_showing: page_alarm
+                                then:
+                                  - script.execute: alarm_submit
+                                else:
+                                  - if:
+                                      condition:
+                                        lvgl.page.is_showing: page_settings
+                                      then:
+                                        - script.execute: settings_leave
   - platform: gpio
     id: button_b
     name: "Button Blue"
@@ -74,53 +204,827 @@ binary_sensor:
       - delayed_on: 20ms
       - delayed_off: 20ms
     on_press:
+      - lambda: |-
+          id(button_b_wake_only) = !id(screen_enabled);
+      - script.execute: screen_activity
       - if:
           condition:
-            voice_assistant.is_running:
+            lambda: return id(button_b_wake_only);
           then:
-            - voice_assistant.stop:
-            - text_sensor.template.publish:
-                id: assist_phase
-                state: "Stopped"
-          else:
-            - text_sensor.template.publish:
-                id: assist_phase
-                state: "Hold..."
-            - text_sensor.template.publish:
-                id: assist_text
-                state: ""
-            - lambda: |-
-                id(display_power).set_vibration(0.35f);
-            - delay: 80ms
-            - lambda: |-
-                id(display_power).set_vibration(0.0f);
-            - delay: 800ms
-            - if:
-                condition:
-                  binary_sensor.is_on: button_b
-                then:
-                  - lambda: |-
-                      id(audio_codec_setup).configure_microphone();
-                  - text_sensor.template.publish:
-                      id: assist_phase
-                      state: "Starting"
-                  - lambda: |-
-                      id(display_power).set_vibration(1.0f);
-                  - delay: 120ms
-                  - lambda: |-
-                      id(display_power).set_vibration(0.0f);
-                  - voice_assistant.start:
-                      silence_detection: true
-                else:
-                  - text_sensor.template.publish:
-                      id: assist_phase
-                      state: "Ready"
-    
+            - switch.turn_on: stopwatch_screen
+    on_release:
+      - script.execute: screen_activity
+    # Wait for release to distinguish a short press from the settings shortcut.
+    on_click:
+      min_length: 20ms
+      max_length: 699ms
+      then:
+        - if:
+            condition:
+              lambda: return !id(button_b_wake_only);
+            then:
+              - if:
+                  condition:
+                    or:
+                      - lvgl.page.is_showing: page_home
+                      - lvgl.page.is_showing: page_assist
+                  then:
+                    - script.execute: assist_toggle
+                  else:
+                    - if:
+                        condition:
+                          lvgl.page.is_showing: page_devices
+                        then:
+                          - script.execute:
+                              id: devices_move
+                              direction: 1
+                        else:
+                          - if:
+                              condition:
+                                lvgl.page.is_showing: page_alarm
+                              then:
+                                - script.execute:
+                                    id: alarm_adjust
+                                    field: !lambda return id(alarm_edit_field);
+                                    direction: 1
+                              else:
+                                - if:
+                                    condition:
+                                      lvgl.page.is_showing: page_settings
+                                    then:
+                                      - script.execute:
+                                          id: settings_move
+                                          direction: 1
+    on_multi_click:
+      - timing:
+          - ON for at least 700ms
+        invalid_cooldown: 0ms
+        then:
+          - if:
+              condition:
+                lambda: return !id(button_b_wake_only);
+              then:
+                - if:
+                    condition:
+                      lvgl.page.is_showing: page_home
+                    then:
+                      - script.execute: settings_enter
+                    else:
+                      - if:
+                          condition:
+                            lvgl.page.is_showing: page_devices
+                          then:
+                            - script.execute: devices_toggle_selected
+                          else:
+                            - if:
+                                condition:
+                                  lvgl.page.is_showing: page_alarm
+                                then:
+                                  - script.execute: alarm_cancel
+                                else:
+                                  - if:
+                                      condition:
+                                        lvgl.page.is_showing: page_settings
+                                      then:
+                                        - script.execute: settings_activate
+
+
 globals:
+  # Persist configuration, but never restore an armed/ringing schedule after reboot.
+  - id: timer_config_seconds
+    type: int
+    restore_value: true
+    initial_value: '300'
+  - id: alarm_config_seconds
+    type: int
+    restore_value: true
+    initial_value: '28800'
+  - id: screensaver_sleeping
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: vibration_power_pct
+    type: int
+    restore_value: true
+    initial_value: '100'
+
+  - id: screensaver_enabled
+    type: bool
+    restore_value: true
+    initial_value: 'false'
+  - id: screensaver_timeout_s
+    type: int
+    restore_value: true
+    initial_value: '60'
+  - id: button_a_wake_only
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: button_b_wake_only
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: selected_setting
+    type: int
+    restore_value: false
+    initial_value: '-1'
+  - id: settings_volume_edit
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: speaker_volume_pct
+    type: int
+    restore_value: true
+    initial_value: '80'
+  - id: alarm_volume_pct
+    type: int
+    restore_value: true
+    initial_value: '35'
+  - id: settings_audio_ready
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+
+  - id: vibration_enabled
+    type: bool
+    restore_value: true
+    initial_value: 'true'
+  - id: alarm_sound_enabled
+    type: bool
+    restore_value: true
+    initial_value: 'true'
+
+  # Field adjusted by the physical buttons: 0 = hours, 1 = minutes, 2 = seconds.
+  - id: alarm_edit_field
+    type: int
+    restore_value: false
+    initial_value: '0'
+  # One-shot alarms live in RAM and are cancelled on reboot.
+  # alarm_mode: 0 = inactive, 1 = countdown, 2 = local clock alarm.
+  - id: alarm_mode
+    type: int
+    restore_value: false
+    initial_value: '0'
+  - id: alarm_ringing
+    type: bool
+    restore_value: false
+    initial_value: 'false'
+  - id: alarm_deadline_ms
+    type: uint32_t
+    restore_value: false
+    initial_value: '0'
+  - id: alarm_target_epoch
+    type: time_t
+    restore_value: false
+    initial_value: '0'
+  - id: alarm_edit_mode
+    type: int
+    restore_value: false
+    initial_value: '0'
+  - id: alarm_edit_hours
+    type: int
+    restore_value: false
+    initial_value: '0'
+  - id: alarm_edit_minutes
+    type: int
+    restore_value: false
+    initial_value: '5'
+  - id: alarm_edit_seconds
+    type: int
+    restore_value: false
+    initial_value: '0'
+  - id: alarm_message
+    type: std::string
+    restore_value: false
+    initial_value: '""'
+
+  - id: selected_device
+    type: int
+    restore_value: false
+    initial_value: "-1"
+
   - id: screen_enabled
     type: bool
     restore_value: true
     initial_value: "true"
+
+# Navigation automatically counts the rows in devices_list.
+# direction: -1 = previous, 1 = next, 0 = refresh.
+script:
+  # Configuration is shared by the local editor and the HA controls.
+  - id: alarm_load_configuration
+    then:
+      - lambda: |-
+          const int seconds = id(alarm_edit_mode) == 0 ? id(timer_config_seconds) : id(alarm_config_seconds);
+          id(alarm_edit_hours) = seconds / 3600;
+          id(alarm_edit_minutes) = (seconds / 60) % 60;
+          id(alarm_edit_seconds) = seconds % 60;
+      - script.execute: alarm_sync_rollers
+
+  - id: ha_start_schedule
+    parameters:
+      clock_mode: int
+    then:
+      - if:
+          condition:
+            lambda: return clock_mode == 1 && !id(esptime).now().is_valid();
+          then:
+            - lambda: |-
+                id(alarm_message) = "Esperando hora de Home Assistant";
+            - script.execute: alarm_refresh
+          else:
+            # Stop any previous sound/vibration before replacing the schedule.
+            - script.execute: alarm_cancel
+            - lambda: |-
+                id(alarm_edit_mode) = clock_mode;
+                id(alarm_edit_field) = 0;
+            - script.execute: alarm_load_configuration
+            - script.execute: alarm_submit
+
+  - id: settings_set_vibration
+    parameters:
+      enabled: bool
+    then:
+      - lambda: |-
+          id(vibration_enabled) = enabled;
+      - if:
+          condition:
+            lambda: return !enabled;
+          then:
+            - script.stop: device_toggle_feedback
+            - script.stop: alarm_vibration_loop
+            - lambda: |-
+                id(display_power).set_vibration(0.0f);
+          else:
+            - if:
+                condition:
+                  lambda: return id(alarm_ringing);
+                then:
+                  - script.execute: alarm_vibration_loop
+      - script.execute: settings_refresh
+
+  - id: settings_set_alarm_sound
+    parameters:
+      enabled: bool
+    then:
+      - lambda: |-
+          id(alarm_sound_enabled) = enabled;
+      - if:
+          condition:
+            lambda: return !enabled;
+          then:
+            - script.stop: alarm_sound_loop
+            - rtttl.stop:
+                id: alarm_rtttl
+            - speaker.stop: alarm_resampler
+            - speaker.stop: alarm_mixer_input
+          else:
+            - if:
+                condition:
+                  lambda: return id(alarm_ringing);
+                then:
+                  - script.execute: alarm_sound_loop
+      - script.execute: settings_refresh
+
+  - id: screen_activity
+    then:
+      - lambda: |-
+          #if LVGL_VERSION_MAJOR >= 9
+          lv_display_trigger_activity(nullptr);
+          #else
+          lv_disp_trig_activity(nullptr);
+          #endif
+
+  - id: settings_apply_volume
+    then:
+      - media_player.volume_set:
+          id: stopwatch_media_player
+          volume: !lambda return id(speaker_volume_pct) / 100.0f;
+      - lambda: |-
+          id(alarm_rtttl).set_gain(id(alarm_volume_pct) / 100.0f);
+          id(settings_audio_ready) = true;
+
+  - id: settings_refresh
+    mode: restart
+    then:
+      - lvgl.widget.update:
+          id: toggle_settings_vibration
+          state:
+            checked: !lambda return id(vibration_enabled);
+      - lvgl.widget.update:
+          id: toggle_settings_alarm_sound
+          state:
+            checked: !lambda return id(alarm_sound_enabled);
+      - lvgl.slider.update:
+          id: slider_settings_speaker_volume
+          value: !lambda return id(speaker_volume_pct);
+          animated: false
+      - lvgl.slider.update:
+          id: slider_settings_alarm_volume
+          value: !lambda return id(alarm_volume_pct);
+          animated: false
+      - lvgl.widget.update:
+          id: toggle_settings_screensaver
+          state:
+            checked: !lambda return id(screensaver_enabled);
+      - lvgl.slider.update:
+          id: slider_settings_timeout
+          value: !lambda return id(screensaver_timeout_s);
+          animated: false
+      - lvgl.slider.update:
+          id: slider_settings_vibration_power
+          value: !lambda return id(vibration_power_pct);
+          animated: false
+      - lambda: |-
+          lv_label_set_text_fmt(id(lbl_settings_vibration_power), "%d%%", id(vibration_power_pct));
+          lv_label_set_text_fmt(id(lbl_settings_timeout), "%d s", id(screensaver_timeout_s));
+          lv_label_set_text_fmt(id(lbl_settings_speaker_volume), "%d%%", id(speaker_volume_pct));
+          lv_label_set_text_fmt(id(lbl_settings_alarm_volume), "%d%%", id(alarm_volume_pct));
+          lv_obj_t *list = id(settings_list);
+          #if LVGL_VERSION_MAJOR >= 9
+          const int count = static_cast<int>(lv_obj_get_child_count(list));
+          #else
+          const int count = static_cast<int>(lv_obj_get_child_cnt(list));
+          #endif
+          if (count == 0) return;
+          int selected = id(selected_setting) < 0 ? count / 2 : id(selected_setting);
+          if (selected >= count) selected = count - 1;
+          id(selected_setting) = selected;
+          for (int i = 0; i < count; i++) {
+            lv_obj_t *row = lv_obj_get_child(list, i);
+            const int offset = i - selected;
+            if (offset < -1 || offset > 1) {
+              lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
+              continue;
+            }
+            lv_obj_clear_flag(row, LV_OBJ_FLAG_HIDDEN);
+            lv_obj_align(row, LV_ALIGN_CENTER, 0, offset * 85);
+            lv_obj_set_style_opa(row, offset == 0 ? LV_OPA_COVER : LV_OPA_40, 0);
+            lv_obj_set_style_border_opa(row, offset == 0 ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+            lv_obj_set_style_border_width(row, offset == 0 && id(settings_volume_edit) ? 2 : 1, 0);
+          }
+
+
+  - id: settings_enter
+    then:
+      - lambda: |-
+          id(settings_volume_edit) = false;
+      - script.execute: settings_refresh
+      - lvgl.page.show: page_settings
+
+  - id: settings_leave
+    then:
+      - lambda: |-
+          id(settings_volume_edit) = false;
+      - lvgl.page.show: page_home
+
+  - id: settings_move
+    parameters:
+      direction: int
+    then:
+      - if:
+          condition:
+            lambda: return id(settings_volume_edit) && (id(selected_setting) == 2 || id(selected_setting) == 3 || id(selected_setting) == 5 || id(selected_setting) == 6);
+          then:
+            - lambda: |-
+                if (id(selected_setting) == 5) {
+                  id(screensaver_timeout_s) += direction * 15;
+                  if (id(screensaver_timeout_s) < 15) id(screensaver_timeout_s) = 15;
+                  if (id(screensaver_timeout_s) > 300) id(screensaver_timeout_s) = 300;
+                  return;
+                }
+                int *value = id(selected_setting) == 6 ? &id(vibration_power_pct) :
+                    (id(selected_setting) == 2 ? &id(speaker_volume_pct) : &id(alarm_volume_pct));
+                *value += direction * 5;
+                if (*value < 0) *value = 0;
+                if (*value > 100) *value = 100;
+            - script.execute: settings_apply_volume
+          else:
+            - lambda: |-
+                id(selected_setting) += direction;
+                if (id(selected_setting) < 0) id(selected_setting) = 0;
+      - script.execute: settings_refresh
+
+  - id: settings_activate
+    then:
+      - lambda: |-
+          if (id(selected_setting) == 2 || id(selected_setting) == 3 || id(selected_setting) == 5 || id(selected_setting) == 6) {
+            id(settings_volume_edit) = !id(settings_volume_edit);
+            return;
+          }
+          id(settings_volume_edit) = false;
+          lv_obj_t *row = lv_obj_get_child(id(settings_list), id(selected_setting));
+          if (row == nullptr) return;
+          #if LVGL_VERSION_MAJOR >= 9
+          const int count = static_cast<int>(lv_obj_get_child_count(row));
+          #else
+          const int count = static_cast<int>(lv_obj_get_child_cnt(row));
+          #endif
+          for (int i = 0; i < count; i++) {
+            lv_obj_t *toggle = lv_obj_get_child(row, i);
+            if (!lv_obj_check_type(toggle, &lv_switch_class)) continue;
+            if (lv_obj_has_state(toggle, LV_STATE_CHECKED)) {
+              lv_obj_clear_state(toggle, LV_STATE_CHECKED);
+            } else {
+              lv_obj_add_state(toggle, LV_STATE_CHECKED);
+            }
+            #if LVGL_VERSION_MAJOR >= 9
+            lv_obj_send_event(toggle, LV_EVENT_VALUE_CHANGED, nullptr);
+            #else
+            lv_event_send(toggle, LV_EVENT_VALUE_CHANGED, nullptr);
+            #endif
+            return;
+          }
+      - script.execute: settings_refresh
+
+  - id: settings_select_volume
+    parameters:
+      index: int
+    then:
+      - lambda: |-
+          id(selected_setting) = index;
+          id(settings_volume_edit) = true;
+      - script.execute: settings_refresh
+
+  - id: assist_cancel
+    then:
+      - voice_assistant.stop:
+      - media_player.stop:
+          id: stopwatch_media_player
+          announcement: true
+      - speaker.stop: assist_mixer_input
+      - text_sensor.template.publish:
+          id: assist_phase
+          state: "Stopped"
+      - lvgl.page.show: page_home
+
+  - id: assist_toggle
+    mode: single
+    then:
+      - if:
+          condition:
+            voice_assistant.is_running:
+          then:
+            - script.execute: assist_cancel
+          else:
+            - if:
+                condition:
+                  and:
+                    - lvgl.page.is_showing: page_home
+                    - lambda: return !id(alarm_ringing);
+                then:
+                  - text_sensor.template.publish:
+                      id: assist_phase
+                      state: "Starting"
+                  - text_sensor.template.publish:
+                      id: assist_text
+                      state: ""
+                  - lambda: |-
+                      id(audio_codec_setup).configure_microphone();
+                  - voice_assistant.start:
+                      silence_detection: true
+
+  - id: alarm_refresh
+    mode: restart
+    then:
+      - lambda: |-
+          const int configured_seconds = id(alarm_edit_hours) * 3600 +
+              id(alarm_edit_minutes) * 60 + id(alarm_edit_seconds);
+          if (id(alarm_edit_mode) == 0) {
+            if (configured_seconds > 0) id(timer_config_seconds) = configured_seconds;
+          } else {
+            id(alarm_config_seconds) = configured_seconds;
+          }
+          lv_label_set_text(id(lbl_alarm_editor_title), id(alarm_edit_mode) == 0 ? "Timer" : "Alarma");
+          lv_obj_set_style_opa(id(img_alarm_mode_timer), id(alarm_edit_mode) == 0 ? LV_OPA_COVER : LV_OPA_50, 0);
+          lv_obj_set_style_opa(id(img_alarm_mode_clock), id(alarm_edit_mode) == 1 ? LV_OPA_COVER : LV_OPA_50, 0);
+          lv_obj_t *rollers[] = {id(roller_alarm_hours)->obj, id(roller_alarm_minutes)->obj, id(roller_alarm_seconds)->obj};
+          for (int i = 0; i < 3; i++) {
+            const bool selected = i == id(alarm_edit_field);
+            lv_obj_set_style_border_color(rollers[i], lv_color_hex(selected ? 0x00FF00 : 0x125012), 0);
+            lv_obj_set_style_border_opa(rollers[i], selected ? LV_OPA_COVER : LV_OPA_40, 0);
+          }
+          if (id(alarm_mode) != 0 || id(alarm_ringing)) {
+            lv_obj_clear_flag(id(img_alarm_armed), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(id(btn_alarm_cancel), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(lbl_alarm_controls_hint), LV_OBJ_FLAG_HIDDEN);
+          } else {
+            lv_obj_add_flag(id(img_alarm_armed), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_add_flag(id(btn_alarm_cancel), LV_OBJ_FLAG_HIDDEN);
+            lv_obj_clear_flag(id(lbl_alarm_controls_hint), LV_OBJ_FLAG_HIDDEN);
+          }
+          if (id(alarm_ringing)) {
+            lv_label_set_text(id(lbl_alarm_status), "Pulsa Detener para cancelar");
+          } else if (id(alarm_mode) == 1) {
+            const int32_t remaining_ms = static_cast<int32_t>(id(alarm_deadline_ms) - millis());
+            const uint32_t remaining = remaining_ms > 0 ? (static_cast<uint32_t>(remaining_ms) + 999) / 1000 : 0;
+            lv_label_set_text_fmt(id(lbl_alarm_status), "Quedan %02u:%02u:%02u",
+                static_cast<unsigned>(remaining / 3600),
+                static_cast<unsigned>((remaining / 60) % 60), static_cast<unsigned>(remaining % 60));
+          } else if (id(alarm_mode) == 2) {
+            auto target = ESPTime::from_epoch_local(id(alarm_target_epoch));
+            const auto text = target.strftime("Alarma: %d/%m %H:%M:%S");
+            lv_label_set_text(id(lbl_alarm_status), text.c_str());
+          } else if (!id(alarm_message).empty()) {
+            lv_label_set_text(id(lbl_alarm_status), id(alarm_message).c_str());
+          } else {
+            lv_label_set_text(id(lbl_alarm_status), "Sin alarma activa");
+          }
+
+  # Sync only on entry or mode changes; periodic refresh must not interrupt a swipe.
+  - id: alarm_sync_rollers
+    then:
+      - lambda: |-
+          lv_roller_set_selected(id(roller_alarm_hours)->obj, id(alarm_edit_hours), LV_ANIM_OFF);
+          lv_roller_set_selected(id(roller_alarm_minutes)->obj, id(alarm_edit_minutes), LV_ANIM_OFF);
+          lv_roller_set_selected(id(roller_alarm_seconds)->obj, id(alarm_edit_seconds), LV_ANIM_OFF);
+
+  - id: alarm_focus_field
+    parameters:
+      field: int
+    then:
+      - lambda: |-
+          if (field >= 0 && field < 3) id(alarm_edit_field) = field;
+      - script.execute: alarm_refresh
+
+  - id: alarm_enter
+    then:
+      - lambda: |-
+          id(alarm_edit_field) = 0;
+      - script.execute: alarm_sync_rollers
+      - script.execute: alarm_refresh
+      - lvgl.page.show: page_alarm
+
+  - id: alarm_select_mode
+    parameters:
+      clock_mode: int
+    then:
+      - lambda: |-
+          id(alarm_edit_mode) = clock_mode;
+          id(alarm_edit_field) = 0;
+          id(alarm_message).clear();
+      - script.execute: alarm_load_configuration
+      - script.execute: alarm_refresh
+
+  - id: alarm_adjust
+    parameters:
+      field: int
+      direction: int
+    then:
+      - lambda: |-
+          if (field < 0 || field > 2) return;
+          int *value = field == 0 ? &id(alarm_edit_hours) :
+              (field == 1 ? &id(alarm_edit_minutes) : &id(alarm_edit_seconds));
+          const int limit = field == 0 ? 24 : 60;
+          *value = (*value + direction + limit) % limit;
+          id(alarm_message).clear();
+          lv_obj_t *rollers[] = {id(roller_alarm_hours)->obj, id(roller_alarm_minutes)->obj, id(roller_alarm_seconds)->obj};
+          lv_roller_set_selected(rollers[field], *value, LV_ANIM_ON);
+      - script.execute: alarm_refresh
+
+  - id: alarm_submit
+    then:
+      - lambda: |-
+          if (id(alarm_edit_mode) == 0) {
+            const uint32_t seconds = id(alarm_edit_hours) * 3600U +
+                id(alarm_edit_minutes) * 60U + id(alarm_edit_seconds);
+            if (seconds == 0) {
+              id(alarm_message) = "Elige un tiempo mayor a 0";
+              return;
+            }
+            // All durations are below 24h; signed subtraction tolerates millis() rollover.
+            id(alarm_deadline_ms) = millis() + seconds * 1000U;
+            id(alarm_mode) = 1;
+          } else {
+            auto now = id(esptime).now();
+            if (!now.is_valid()) {
+              id(alarm_message) = "Esperando hora de Home Assistant";
+              return;
+            }
+            // ESPHome owns the timezone; libc mktime() may still use UTC.
+            auto target = now;
+            target.hour = id(alarm_edit_hours);
+            target.minute = id(alarm_edit_minutes);
+            target.second = id(alarm_edit_seconds);
+            target.recalc_timestamp_local();
+            if (target.timestamp <= now.timestamp) {
+              target = now;
+              // Advance the local calendar, then recalculate its UTC timestamp.
+              target.increment_day();
+              target.hour = id(alarm_edit_hours);
+              target.minute = id(alarm_edit_minutes);
+              target.second = id(alarm_edit_seconds);
+              target.recalc_timestamp_local();
+            }
+            if (target.timestamp == static_cast<time_t>(-1)) {
+              id(alarm_message) = "No se pudo programar la hora";
+              return;
+            }
+            id(alarm_target_epoch) = target.timestamp;
+            id(alarm_mode) = 2;
+          }
+          id(alarm_message).clear();
+      - script.execute: alarm_refresh
+      - if:
+          condition:
+            lambda: return id(alarm_mode) != 0 && id(alarm_message).empty();
+          then:
+            - lvgl.page.show: page_home
+
+  - id: alarm_cancel
+    then:
+      - lambda: |-
+          id(alarm_ringing) = false;
+          id(alarm_mode) = 0;
+          id(alarm_deadline_ms) = 0;
+          id(alarm_target_epoch) = 0;
+          id(alarm_message).clear();
+      - script.stop: alarm_fire
+      - script.stop: alarm_vibration_loop
+      - script.stop: alarm_sound_loop
+      - rtttl.stop:
+          id: alarm_rtttl
+      - speaker.stop: alarm_resampler
+      - speaker.stop: alarm_mixer_input
+      - lambda: |-
+          id(display_power).set_vibration(0.0f);
+      - script.execute: alarm_refresh
+      - lvgl.page.show: page_home
+
+  - id: alarm_fire
+    mode: single
+    then:
+      - lambda: |-
+          id(alarm_ringing) = true;
+          lv_label_set_text(id(lbl_alarm_alert), id(alarm_mode) == 1 ? "Cuenta atrás finalizada" : "Es la hora de tu alarma");
+      - script.stop: device_toggle_feedback
+      - switch.turn_on: stopwatch_screen
+      - lvgl.resume:
+      - lvgl.page.show: page_alarm_ringing
+      - script.execute: alarm_refresh
+      # Free the microphone/codec and stop any current voice announcement.
+      - voice_assistant.stop:
+      - media_player.stop:
+          id: stopwatch_media_player
+          announcement: true
+      - media_player.stop:
+          id: stopwatch_media_player
+      - speaker.stop: assist_mixer_input
+      - delay: 200ms
+      - lambda: |-
+          id(audio_codec_setup).configure_speaker();
+      - if:
+          condition:
+            lambda: return id(vibration_enabled);
+          then:
+            - script.execute: alarm_vibration_loop
+      - if:
+          condition:
+            lambda: return id(alarm_sound_enabled);
+          then:
+            - script.execute: alarm_sound_loop
+
+  - id: alarm_vibration_loop
+    mode: single
+    then:
+      - while:
+          condition:
+            lambda: return id(alarm_ringing) && id(vibration_enabled);
+          then:
+            - lambda: |-
+                id(display_power).set_vibration(id(vibration_enabled) ? 0.75f * id(vibration_power_pct) / 100.0f : 0.0f);
+            - delay: 350ms
+            - lambda: |-
+                id(display_power).set_vibration(0.0f);
+            - delay: 250ms
+
+  - id: alarm_sound_loop
+    mode: single
+    then:
+      - while:
+          condition:
+            lambda: return id(alarm_ringing) && id(alarm_sound_enabled);
+          then:
+            - lambda: |-
+                id(alarm_rtttl).set_gain(id(alarm_volume_pct) / 100.0f);
+            - rtttl.play:
+                id: alarm_rtttl
+                rtttl: ${alarm_melody}
+            - wait_until:
+                condition:
+                  not:
+                    rtttl.is_playing:
+                      id: alarm_rtttl
+                timeout: 30s
+            - rtttl.stop:
+                id: alarm_rtttl
+            - delay: 500ms
+
+  - id: device_toggle_feedback
+    mode: restart
+    then:
+      - lambda: |-
+          ESP_LOGD("device_feedback", "Device toggle: vibration pulse");
+          id(display_power).set_vibration(id(vibration_enabled) ? 1.0f * id(vibration_power_pct) / 100.0f : 0.0f);
+      - delay: 120ms
+      - lambda: |-
+          id(display_power).set_vibration(0.0f);
+
+  - id: devices_move
+    mode: restart
+    parameters:
+      direction: int
+    then:
+      - lambda: |-
+          lv_obj_t *list = id(devices_list);
+          #if LVGL_VERSION_MAJOR >= 9
+          const int count = static_cast<int>(lv_obj_get_child_count(list));
+          #else
+          const int count = static_cast<int>(lv_obj_get_child_cnt(list));
+          #endif
+          if (count == 0) {
+            id(selected_device) = 0;
+            return;
+          }
+          // Choose the middle device on the first refresh after boot.
+          int selected = id(selected_device) < 0 ? count / 2 : id(selected_device);
+          selected += direction;
+          if (selected < 0) selected = 0;
+          if (selected >= count) selected = count - 1;
+          id(selected_device) = selected;
+          for (int i = 0; i < count; i++) {
+            lv_obj_t *row = lv_obj_get_child(list, i);
+            const int offset = i - selected;
+            if (offset < -1 || offset > 1) {
+              lv_obj_add_flag(row, LV_OBJ_FLAG_HIDDEN);
+              continue;
+            }
+            lv_obj_clear_flag(row, LV_OBJ_FLAG_HIDDEN);
+            // Fixed center, including the first and last devices.
+            lv_obj_align(row, LV_ALIGN_CENTER, 0, offset * 85);
+            lv_obj_set_style_opa(row, offset == 0 ? LV_OPA_COVER : LV_OPA_40, 0);
+            lv_obj_set_style_border_opa(row, offset == 0 ? LV_OPA_COVER : LV_OPA_TRANSP, 0);
+          }
+
+  # Reuse the selected row's tactile switch and its existing on_change action.
+  - id: devices_toggle_selected
+    mode: single
+    then:
+      - lambda: |-
+          lv_obj_t *list = id(devices_list);
+          #if LVGL_VERSION_MAJOR >= 9
+          const int count = static_cast<int>(lv_obj_get_child_count(list));
+          #else
+          const int count = static_cast<int>(lv_obj_get_child_cnt(list));
+          #endif
+          const int selected = id(selected_device);
+          if (selected < 0 || selected >= count) return;
+          lv_obj_t *row = lv_obj_get_child(list, selected);
+          // Find the switch within the selected row, independent of row order.
+          #if LVGL_VERSION_MAJOR >= 9
+          const int children = static_cast<int>(lv_obj_get_child_count(row));
+          #else
+          const int children = static_cast<int>(lv_obj_get_child_cnt(row));
+          #endif
+          for (int i = 0; i < children; i++) {
+            lv_obj_t *toggle = lv_obj_get_child(row, i);
+            if (!lv_obj_check_type(toggle, &lv_switch_class)) continue;
+            if (lv_obj_has_state(toggle, LV_STATE_DISABLED)) return;
+            if (lv_obj_has_state(toggle, LV_STATE_CHECKED)) {
+              lv_obj_clear_state(toggle, LV_STATE_CHECKED);
+            } else {
+              lv_obj_add_state(toggle, LV_STATE_CHECKED);
+            }
+            // The same event as a user toggle fires the existing HA action once.
+            #if LVGL_VERSION_MAJOR >= 9
+            lv_obj_send_event(toggle, LV_EVENT_VALUE_CHANGED, nullptr);
+            #else
+            lv_event_send(toggle, LV_EVENT_VALUE_CHANGED, nullptr);
+            #endif
+            return;
+          }
+
+font:
+  - file: "gfonts://Figtree"
+    id: font_date
+    size: 18
+    glyphs: ${allowed_characters}
+  - file: "gfonts://Figtree"
+    id: font_clock
+    size: 30
+    glyphs: ${allowed_characters}
+  - file: "gfonts://Material+Symbols+Outlined"
+    id: font_battery
+    size: 20
+    glyphs: [
+      "\U0000f24f", # 100%
+      "\U0000f255", # 50%
+      "\U0000f257", # 10%
+    ]
+  - file: "gfonts://Figtree"
+    id: font_device
+    size: 24
+    glyphs: ${allowed_characters}
 
 i2c:
   id: sys_i2c
@@ -130,17 +1034,113 @@ i2c:
   scan: true
 
 image:
+  - file: mdi:vibrate
+    id: icon_settings_vibration
+    type: RGB565
+    resize: 40x40
+    transparency: alpha_channel
+  - file: mdi:volume-high
+    id: icon_settings_alarm_sound
+    type: RGB565
+    resize: 40x40
+    transparency: alpha_channel
+
+  - file: mdi:timer-alert
+    id: icon_alarm_timer
+    type: RGB565
+    resize: 40x40
+    transparency: alpha_channel
+  - file: mdi:alarm
+    id: icon_alarm_clock
+    type: RGB565
+    resize: 40x40
+    transparency: alpha_channel
+
+  - file: mdi:bell
+    id: icon_alarm_bell_large
+    type: RGB565
+    resize: 80x80
+    transparency: alpha_channel
+
+  - file: mdi:bell
+    id: icon_alarm_bell
+    type: RGB565
+    resize: 28x28
+    transparency: alpha_channel
+
+  - file: mdi:home
+    id: icon_home
+    type: RGB565
+    resize: 40x40
+    transparency: alpha_channel
+
   - file: ${background_image}
     id: image_bg
     type: RGB565
     resize: 466x466
     transparency: opaque
-  
+  - file: ${assist_image}
+    id: image_assist
+    type: RGB565
+    resize: 150x150
+    transparency: alpha_channel
+
+  - file: mdi:triangle
+    id: icon_triangle
+    type: RGB565
+    resize: 30x30
+    transparency: alpha_channel
+
+  - file: mdi:cog
+    id: icon_settings
+    type: RGB565
+    resize: 50x50
+    transparency: alpha_channel
+
+  - file: mdi:microphone
+    id: icon_assist
+    type: RGB565
+    resize: 40x40
+    transparency: alpha_channel
+  - file: mdi:devices
+    id: icon_devices
+    type: RGB565
+    resize: 40x40
+    transparency: alpha_channel
+
+  - file: mdi:ceiling-light
+    id: icon_device_light
+    type: RGB565
+    resize: 60x60
+    transparency: alpha_channel
+  - file: mdi:fan
+    id: icon_device_fan
+    type: RGB565
+    resize: 60x60
+    transparency: alpha_channel
+  - file: mdi:roller-shade
+    id: icon_device_cover
+    type: RGB565
+    resize: 60x60
+    transparency: alpha_channel
+  - file: mdi:fire
+    id: icon_device_climate
+    type: RGB565
+    resize: 60x60
+    transparency: alpha_channel
+  - file: mdi:printer-3d-nozzle
+    id: icon_device_3dprinter
+    type: RGB565
+    resize: 60x60
+    transparency: alpha_channel
+
+
+
 stopwatch_audio:
   id: audio_codec_setup
   i2c_id: sys_i2c
   address: 0x18
-  
+
 stopwatch_battery:
   id: battery_monitor
   i2c_id: sys_i2c
@@ -149,8 +1149,24 @@ stopwatch_battery:
   voltage:
     name: "Battery Voltage"
   level:
+    id: battery_percentage
     name: "Battery"
-  
+    on_value:
+      then:
+      - lvgl.label.update:
+          id: lbl_battery_percentage
+          text:
+            format: "%.0f%%"
+            args:
+              - id(battery_percentage).state
+      - lvgl.label.update:
+          id: battery_icon
+          text: !lambda |-
+            float pct = x;
+            if (pct >= 70.0) return "\U0000f24f";
+            if (pct >= 30.0) return "\U0000f255";
+            return "\U0000f257";
+
 stopwatch_power:
   id: display_power
   i2c_id: sys_i2c
@@ -159,8 +1175,98 @@ stopwatch_power:
   oled_reset_pin: 4
   reset_pulse: true
 
-
 text_sensor:
+  - platform: template
+    id: ha_timer_state
+    name: "Timer estado"
+    icon: mdi:timer-outline
+    update_interval: 1s
+    lambda: |-
+      if (id(alarm_mode) != 1) return {"Inactivo"};
+      return id(alarm_ringing) ? std::string("Sonando") : std::string("Activo");
+
+  - platform: template
+    id: ha_alarm_state
+    name: "Alarma estado"
+    icon: mdi:alarm
+    update_interval: 1s
+    lambda: |-
+      if (id(alarm_mode) != 2) return {"Inactiva"};
+      return id(alarm_ringing) ? std::string("Sonando") : std::string("Programada");
+
+  - platform: template
+    id: ha_alarm_target
+    name: "Alarma próxima activación"
+    icon: mdi:calendar-clock
+    update_interval: 1s
+    lambda: |-
+      if (id(alarm_mode) != 2) return {"Sin alarma activa"};
+      auto target = ESPTime::from_epoch_local(id(alarm_target_epoch));
+      return target.strftime("%d/%m/%Y %H:%M:%S");
+
+  - platform: template
+    id: ha_alarm_message
+    name: "Timer y alarma mensaje"
+    icon: mdi:information-outline
+    entity_category: diagnostic
+    update_interval: 1s
+    lambda: return id(alarm_message);
+
+  - platform: homeassistant
+    id: state_light_ceiling
+    entity_id: ${light_ceiling}
+    internal: true
+    on_value:
+      - lvgl.widget.update:
+          id: toggle_light_ceiling
+          state:
+            checked: !lambda return x == "on";
+            disabled: !lambda return x.empty() || x == "unknown" || x == "unavailable";
+
+  - platform: homeassistant
+    id: state_fan_ceiling
+    entity_id: ${fan_ceiling}
+    internal: true
+    on_value:
+      - lvgl.widget.update:
+          id: toggle_fan_ceiling
+          state:
+            checked: !lambda return x == "on";
+            disabled: !lambda return x.empty() || x == "unknown" || x == "unavailable";
+
+  - platform: homeassistant
+    id: state_cover1
+    entity_id: ${cover1}
+    internal: true
+    on_value:
+      - lvgl.widget.update:
+          id: toggle_cover1
+          state:
+            checked: !lambda return x == "open" || x == "opening";
+            disabled: !lambda return x.empty() || x == "unknown" || x == "unavailable";
+
+  - platform: homeassistant
+    id: state_climate
+    entity_id: ${climate}
+    internal: true
+    on_value:
+      - lvgl.widget.update:
+          id: toggle_climate
+          state:
+            checked: !lambda return x != "off" && x != "unknown" && x != "unavailable" && !x.empty();
+            disabled: !lambda return x.empty() || x == "unknown" || x == "unavailable";
+
+  - platform: homeassistant
+    id: state_printer_3d
+    entity_id: ${printer_3d}
+    internal: true
+    on_value:
+      - lvgl.widget.update:
+          id: toggle_printer_3d
+          state:
+            checked: !lambda return x == "on";
+            disabled: !lambda return x.empty() || x == "unknown" || x == "unavailable";
+
   - platform: template
     id: assist_phase
     internal: true
@@ -175,7 +1281,82 @@ text_sensor:
     lambda: |-
       return {""};
 
+time:
+  - platform: homeassistant
+    id: esptime
+    timezone: Europe/Madrid
+    on_time:
+      - seconds: 0
+        then:
+          - lvgl.label.update:
+              id: lbl_clock
+              text: !lambda 'return id(esptime).now().strftime("%H:%M");'
+          - lvgl.label.update:
+              id: lbl_date
+              text: !lambda 'return id(esptime).now().strftime("%d/%m/%y");'
+    on_time_sync:
+      then:
+        - lvgl.label.update:
+            id: lbl_clock
+            text: !lambda 'return id(esptime).now().strftime("%H:%M");'
+        - lvgl.label.update:
+            id: lbl_date
+            text: !lambda 'return id(esptime).now().strftime("%d/%m/%y");'
+
+
+
 switch:
+  - platform: template
+    id: ha_vibration_enabled
+    name: "Vibración"
+    icon: mdi:vibrate
+    entity_category: config
+    # The persisted global owns the state. Do not run actions before LVGL setup.
+    restore_mode: DISABLED
+    lambda: return id(vibration_enabled);
+    turn_on_action:
+      - script.execute:
+          id: settings_set_vibration
+          enabled: true
+    turn_off_action:
+      - script.execute:
+          id: settings_set_vibration
+          enabled: false
+
+  - platform: template
+    id: ha_alarm_sound_enabled
+    name: "Sonido alarma"
+    icon: mdi:volume-high
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: return id(alarm_sound_enabled);
+    turn_on_action:
+      - script.execute:
+          id: settings_set_alarm_sound
+          enabled: true
+    turn_off_action:
+      - script.execute:
+          id: settings_set_alarm_sound
+          enabled: false
+
+  - platform: template
+    id: ha_screensaver_enabled
+    name: "Salvapantallas"
+    icon: mdi:monitor-off
+    entity_category: config
+    restore_mode: DISABLED
+    lambda: return id(screensaver_enabled);
+    turn_on_action:
+      - lambda: |-
+          id(screensaver_enabled) = true;
+      - script.execute: screen_activity
+      - script.execute: settings_refresh
+    turn_off_action:
+      - lambda: |-
+          id(screensaver_enabled) = false;
+      - script.execute: screen_activity
+      - script.execute: settings_refresh
+
   - platform: template
     id: stopwatch_screen
     name: "Display"
@@ -183,13 +1364,22 @@ switch:
     optimistic: true
     restore_mode: RESTORE_DEFAULT_ON
     turn_on_action:
+      - if:
+          condition:
+            lambda: return id(screensaver_sleeping) && !id(alarm_ringing);
+          then:
+            - script.execute: settings_leave
       - lambda: |-
+          id(screensaver_sleeping) = false;
           id(screen_enabled) = true;
           id(stopwatch_display).set_brightness(180);
+      - script.execute: screen_activity
+      - lvgl.resume:
     turn_off_action:
       - lambda: |-
           id(screen_enabled) = false;
           id(stopwatch_display).set_brightness(0);
+      - lvgl.pause:
 
 #motion:
 #  - platform: bmi270
@@ -256,14 +1446,188 @@ switch:
 
 
 
+# HA controls use the persisted globals as their source of truth.
+number:
+  - platform: template
+    id: ha_speaker_volume
+    name: "Volumen altavoz"
+    icon: mdi:volume-high
+    min_value: 0
+    max_value: 100
+    step: 5
+    mode: box
+    unit_of_measurement: "%"
+    update_interval: 1s
+    lambda: return id(speaker_volume_pct);
+    entity_category: config
+    set_action:
+      - lambda: |-
+          id(speaker_volume_pct) = std::max(0, std::min(100, static_cast<int>(x + 0.5f)));
+      - script.execute: settings_apply_volume
+      - script.execute: screen_activity
+      - script.execute: settings_refresh
+
+  - platform: template
+    id: ha_alarm_volume
+    name: "Volumen alarma"
+    icon: mdi:alarm-note
+    min_value: 0
+    max_value: 100
+    step: 5
+    mode: box
+    unit_of_measurement: "%"
+    update_interval: 1s
+    lambda: return id(alarm_volume_pct);
+    entity_category: config
+    set_action:
+      - lambda: |-
+          id(alarm_volume_pct) = std::max(0, std::min(100, static_cast<int>(x + 0.5f)));
+      - script.execute: settings_apply_volume
+      - script.execute: screen_activity
+      - script.execute: settings_refresh
+
+  - platform: template
+    id: ha_vibration_power
+    name: "Potencia vibración"
+    icon: mdi:vibrate
+    min_value: 0
+    max_value: 100
+    step: 5
+    mode: box
+    unit_of_measurement: "%"
+    update_interval: 1s
+    lambda: return id(vibration_power_pct);
+    entity_category: config
+    set_action:
+      - lambda: |-
+          id(vibration_power_pct) = std::max(0, std::min(100, static_cast<int>(x + 0.5f)));
+      - script.execute: screen_activity
+      - script.execute: settings_refresh
+
+  - platform: template
+    id: ha_screensaver_timeout
+    name: "Espera pantalla"
+    icon: mdi:monitor-off
+    min_value: 15
+    max_value: 300
+    step: 15
+    mode: box
+    unit_of_measurement: "s"
+    update_interval: 1s
+    lambda: return id(screensaver_timeout_s);
+    entity_category: config
+    set_action:
+      - lambda: |-
+          id(screensaver_timeout_s) = std::max(15, std::min(300, static_cast<int>(x + 0.5f)));
+      - script.execute: screen_activity
+      - script.execute: settings_refresh
+
+  - platform: template
+    id: ha_timer_duration
+    name: "Timer duración"
+    icon: mdi:timer-cog-outline
+    min_value: 1
+    max_value: 86399
+    step: 1
+    mode: box
+    unit_of_measurement: "s"
+    update_interval: 1s
+    lambda: return id(timer_config_seconds);
+    set_action:
+      - lambda: |-
+          id(timer_config_seconds) = std::max(1, std::min(86399, static_cast<int>(x + 0.5f)));
+      - if:
+          condition:
+            lambda: return id(alarm_edit_mode) == 0;
+          then:
+            - script.execute: alarm_load_configuration
+      - script.execute: alarm_refresh
+
+datetime:
+  - platform: template
+    id: ha_alarm_time
+    type: time
+    name: "Alarma hora"
+    icon: mdi:alarm
+    update_interval: 1s
+    lambda: |-
+      ESPTime value{};
+      value.hour = id(alarm_config_seconds) / 3600;
+      value.minute = (id(alarm_config_seconds) / 60) % 60;
+      value.second = id(alarm_config_seconds) % 60;
+      return value;
+    set_action:
+      - lambda: |-
+          id(alarm_config_seconds) = x.hour * 3600 + x.minute * 60 + x.second;
+      - if:
+          condition:
+            lambda: return id(alarm_edit_mode) == 1;
+          then:
+            - script.execute: alarm_load_configuration
+      - script.execute: alarm_refresh
+
+sensor:
+  - platform: template
+    id: ha_timer_remaining
+    name: "Timer tiempo restante"
+    icon: mdi:timer-sand
+    device_class: duration
+    unit_of_measurement: s
+    accuracy_decimals: 0
+    update_interval: 1s
+    lambda: |-
+      if (id(alarm_mode) != 1 || id(alarm_ringing)) return 0;
+      const int32_t remaining_ms = static_cast<int32_t>(id(alarm_deadline_ms) - millis());
+      return remaining_ms > 0 ? (static_cast<uint32_t>(remaining_ms) + 999) / 1000 : 0;
+
 button:
+  - platform: template
+    id: ha_timer_start
+    name: "Timer iniciar"
+    icon: mdi:timer-play-outline
+    on_press:
+      - script.execute:
+          id: ha_start_schedule
+          clock_mode: 0
+
+  - platform: template
+    id: ha_alarm_start
+    name: "Alarma activar"
+    icon: mdi:alarm-check
+    on_press:
+      - script.execute:
+          id: ha_start_schedule
+          clock_mode: 1
+
+  - platform: template
+    id: ha_timer_cancel
+    name: "Timer cancelar"
+    icon: mdi:timer-cancel-outline
+    on_press:
+      - if:
+          condition:
+            lambda: return id(alarm_mode) == 1;
+          then:
+            - script.execute: alarm_cancel
+
+  - platform: template
+    id: ha_alarm_cancel
+    name: "Alarma cancelar"
+    icon: mdi:alarm-off
+    on_press:
+      - if:
+          condition:
+            lambda: return id(alarm_mode) == 2;
+          then:
+            - script.execute: alarm_cancel
+
   - platform: template
     id: stopwatch_vibrate_1s
     name: "Vibrate"
     icon: mdi:vibrate
     on_press:
       - lambda: |-
-          id(display_power).set_vibration(1.0f);
+          id(display_power).set_vibration(id(vibration_enabled) ? 1.0f * id(vibration_power_pct) / 100.0f : 0.0f);
       - delay: 1s
       - lambda: |-
           id(display_power).set_vibration(0.0f);
@@ -296,6 +1660,28 @@ speaker:
     mclk_multiple: 128
     channel: stereo
 
+  # The mixer converts the mono ringtone into the stereo hardware output.
+  - platform: mixer
+    id: stopwatch_audio_mixer
+    output_speaker: stopwatch_speaker
+    num_channels: 2
+    bits_per_sample: 16
+    source_speakers:
+      - id: assist_mixer_input
+      - id: alarm_mixer_input
+
+  # RTTTL generates 16 kHz audio; the existing codec runs at 44.1 kHz.
+  - platform: resampler
+    id: alarm_resampler
+    output_speaker: alarm_mixer_input
+    sample_rate: 44100
+    bits_per_sample: 16
+
+rtttl:
+  id: alarm_rtttl
+  speaker: alarm_resampler
+  gain: 35%
+
 media_player:
   - platform: speaker
     id: stopwatch_media_player
@@ -303,8 +1689,18 @@ media_player:
     icon: mdi:speaker
     volume_initial: 80%
     volume_max: 100%
+    on_state:
+      - if:
+          condition:
+            lambda: return id(settings_audio_ready);
+          then:
+            - lambda: |-
+                const float volume = id(stopwatch_media_player).volume;
+                if (volume >= 0.0f && volume <= 1.0f)
+                  id(speaker_volume_pct) = static_cast<int>(volume * 100.0f + 0.5f);
+            - script.execute: settings_refresh
     announcement_pipeline:
-      speaker: stopwatch_speaker
+      speaker: assist_mixer_input
       format: FLAC
       sample_rate: 44100
       num_channels: 2
@@ -325,10 +1721,20 @@ voice_assistant:
         id: assist_phase
         state: "Ready"
   on_client_disconnected:
+    - if:
+        condition:
+          lvgl.page.is_showing: page_assist
+        then:
+          - lvgl.page.show: page_home
     - text_sensor.template.publish:
         id: assist_phase
         state: "Disconnected"
   on_start:
+    - if:
+        condition:
+          lambda: return !id(alarm_ringing);
+        then:
+          - lvgl.page.show: page_assist
     - text_sensor.template.publish:
         id: assist_phase
         state: "Starting"
@@ -337,7 +1743,7 @@ voice_assistant:
         id: assist_phase
         state: "Listening"
     - lambda: |-
-        id(display_power).set_vibration(0.45f);
+        id(display_power).set_vibration(id(vibration_enabled) ? 0.45f * id(vibration_power_pct) / 100.0f : 0.0f);
     - delay: 60ms
     - lambda: |-
         id(display_power).set_vibration(0.0f);
@@ -376,6 +1782,11 @@ voice_assistant:
         id: assist_phase
         state: "Speaking"
   on_end:
+    - if:
+        condition:
+          lvgl.page.is_showing: page_assist
+        then:
+          - lvgl.page.show: page_home
     - lambda: |-
         id(audio_codec_setup).configure_speaker();
     - text_sensor.template.publish:
@@ -386,6 +1797,11 @@ voice_assistant:
         id: assist_phase
         state: "Ready"
   on_error:
+    - if:
+        condition:
+          lvgl.page.is_showing: page_assist
+        then:
+          - lvgl.page.show: page_home
     - lambda: |-
         id(audio_codec_setup).configure_speaker();
     - text_sensor.template.publish:
@@ -419,19 +1835,6 @@ display:
     brightness: 180
     update_interval: 500ms
 
-font:
-  - file: "gfonts://Roboto"
-    id: font_title
-    size: 28
-  - file: "gfonts://Roboto"
-    id: font_label
-    size: 18
-  - file: "gfonts://Roboto Mono"
-    id: font_value
-    size: 24
-  - file: "gfonts://Roboto"
-    id: font_small
-    size: 16
 
 touchscreen:
   - platform: cst816
@@ -442,6 +1845,63 @@ touchscreen:
     skip_probe: false
 
 lvgl:
+  resume_on_input: false
+  style_definitions:
+
+    - id: style_device_row
+      width: 350
+      height: 70
+      bg_opa: TRANSP
+      border_width: 1
+      border_color: 0x00FF00
+      radius: 16
+      pad_all: 4
+
+    - id: style_wide_lines
+      line_color: 0x070b06
+      line_width: 5
+      opa: 50%
+    - id: style_thin_lines
+      line_color: 0x070b06
+      line_width: 2
+      opa: 50%
+    - id: style_dragon_balls
+      width: 20
+      height: 20
+      radius: 20
+      opa: 100%
+      bg_opa: 100%
+      border_width: 0
+      bg_grad: grad_dragon_ball
+    - id: style_big_dragon_ball
+      width: 200
+      height: 200
+      radius: 200
+      opa: 100%
+      bg_opa: 100%
+      border_width: 0
+      bg_grad: grad_big_dragon_ball
+
+  gradients:
+    - id: grad_dragon_ball
+      direction: hor
+      stops:
+        - color: 0xffff00
+          opa: 100%
+          position: 0%
+        - color: 0xffde00
+          opa: 100%
+          position: 60%
+    - id: grad_big_dragon_ball
+      direction: hor
+      stops:
+        - color: 0xf58f0b
+          opa: 100%
+          position: 0%
+        - color: 0xf5d70b
+          opa: 100%
+          position: 60%
+
   pages:
     - id: page_home
       bg_color: 0x000000
@@ -450,3 +1910,1364 @@ lvgl:
             src: image_bg
             x: 0
             y: 0
+            image_opa: 0.5
+
+        # Animation
+        - obj:
+            id: group_simbols
+            align: center
+            x: 0
+            y: 0
+            width: 100%
+            height: 100%
+            bg_opa: 0
+            border_width: 0
+            scrollbar_mode: "OFF"
+            pad_all: 0
+
+            widgets:
+
+            # Dragon Balls
+            - obj:
+                id: dragon_ball_1
+                styles: style_dragon_balls
+                align: center
+                x: 20
+                y: -110
+                scrollbar_mode: "OFF"
+
+            - obj:
+                id: dragon_ball_2
+                styles: style_dragon_balls
+                align: center
+                x: -150
+                y: -30
+                scrollbar_mode: "OFF"
+
+            - obj:
+                id: dragon_ball_3
+                styles: style_dragon_balls
+                align: center
+                x: 120
+                y: 120
+                scrollbar_mode: "OFF"
+
+            - image:
+                src: icon_triangle
+                align: center
+                image_recolor: 0xff0000
+                image_recolor_opa: COVER
+
+        # Buttons
+        - image:
+            src: icon_devices
+            x: -135
+            y: 65
+            align: TOP_MID
+            image_recolor: 0x00ff00
+            image_recolor_opa: COVER
+            image_opa: 30%
+            on_press:
+              then:
+                - lvgl.page.show: page_devices
+        - image:
+            src: icon_assist
+            x: 140
+            y: 65
+            align: TOP_MID
+            image_recolor: 0x00ff00
+            image_recolor_opa: COVER
+            image_opa: 30%
+
+        - image:
+            id: img_alarm_armed
+            src: icon_alarm_bell
+            align: BOTTOM_MID
+            x: -125
+            y: -55
+            hidden: true
+            image_recolor: 0xFF0000
+            image_recolor_opa: COVER
+            image_opa: 60%
+            clickable: true
+            on_click:
+              - script.execute: alarm_enter
+
+        # Info & Settings
+        - label:
+            id: lbl_date
+            x: -60
+            y: -50
+            align: BOTTOM_MID
+            text: "00/00/26"
+            text_color: 0x00FF00
+            text_font: font_date
+            text_opa: 30%
+
+        - label:
+            id: lbl_clock
+            x: -60
+            y: -20
+            align: BOTTOM_MID
+            text: "00:00"
+            text_color: 0x00FF00
+            text_font: font_clock
+            text_opa: 50%
+
+        - image:
+            src: icon_settings
+            x: 40
+            y: -22
+            align: BOTTOM_MID
+            image_recolor: 0x00ff00
+            image_recolor_opa: COVER
+            image_opa: 50%
+
+            clickable: true
+            on_click:
+              - script.execute: settings_enter
+
+        - label:
+            id: lbl_battery_percentage
+            text: "100%"
+            x: 110
+            y: -50
+            align: BOTTOM_MID
+            text_color: 0x00FF00
+            text_font: font_date
+            text_opa: 30%
+        - label:
+            id: battery_icon
+            text: "\U0000f24f"
+            x: 105
+            y: -30
+            align: BOTTOM_MID
+            text_font: font_battery
+            text_color: 0x00FF00
+            text_opa: 30%
+
+
+
+    - id: page_devices
+      bg_color: 0x000000
+      widgets:
+        - image:
+            src: image_bg
+            x: 0
+            y: 0
+            image_opa: 0.5
+
+        - label:
+            align: TOP_MID
+            y: 48
+            text: "Dispositivos"
+            text_font: font_device
+            text_color: 0x00FF00
+        - obj:
+            id: devices_list
+            align: CENTER
+            width: 360
+            height: 250
+            pad_all: 0
+            bg_opa: TRANSP
+            border_width: 0
+            scrollbar_mode: "OFF"
+            scrollable: false
+            # Each row has an icon, name and toggle. Entity IDs are in substitutions.
+            widgets:
+              - obj:
+                  styles: style_device_row
+                  scrollbar_mode: "OFF"
+                  scrollable: false
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_device_light
+                        align: LEFT_MID
+                        x: 8
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                    - label:
+                        align: LEFT_MID
+                        x: 80
+                        width: 180
+                        long_mode: DOT
+                        text: "Luz principal"
+                        text_font: font_device
+                        text_color: 0x00FF00
+                    - switch:
+                        id: toggle_light_ceiling
+                        align: RIGHT_MID
+                        x: -8
+                        width: 56
+                        height: 30
+                        bg_color: 0x153015
+                        indicator:
+                          bg_color: 0x296d29
+                          bg_opa: COVER
+                          checked:
+                            bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                        state:
+                          disabled: true
+                        # State changes vibrate on this page; only user changes send HA actions.
+                        on_value:
+                          - if:
+                              condition:
+                                and:
+                                  - lvgl.page.is_showing: page_devices
+                                  - lambda: return !id(alarm_ringing);
+                              then:
+                                - script.execute: device_toggle_feedback
+                        on_change:
+                          - if:
+                              condition:
+                                lambda: return x;
+                              then:
+                                - homeassistant.action:
+                                    action: light.turn_on
+                                    data:
+                                      entity_id: ${light_ceiling}
+                              else:
+                                - homeassistant.action:
+                                    action: light.turn_off
+                                    data:
+                                      entity_id: ${light_ceiling}
+              - obj:
+                  styles: style_device_row
+                  scrollbar_mode: "OFF"
+                  scrollable: false
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_device_fan
+                        align: LEFT_MID
+                        x: 8
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                    - label:
+                        align: LEFT_MID
+                        x: 80
+                        width: 180
+                        long_mode: DOT
+                        text: "Ventilador"
+                        text_font: font_device
+                        text_color: 0x00FF00
+                    - switch:
+                        id: toggle_fan_ceiling
+                        align: RIGHT_MID
+                        x: -8
+                        width: 56
+                        height: 30
+                        bg_color: 0x153015
+                        indicator:
+                          bg_color: 0x296d29
+                          bg_opa: COVER
+                          checked:
+                            bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                        state:
+                          disabled: true
+                        # State changes vibrate on this page; only user changes send HA actions.
+                        on_value:
+                          - if:
+                              condition:
+                                and:
+                                  - lvgl.page.is_showing: page_devices
+                                  - lambda: return !id(alarm_ringing);
+                              then:
+                                - script.execute: device_toggle_feedback
+                        on_change:
+                          - if:
+                              condition:
+                                lambda: return x;
+                              then:
+                                - homeassistant.action:
+                                    action: fan.turn_on
+                                    data:
+                                      entity_id: ${fan_ceiling}
+                              else:
+                                - homeassistant.action:
+                                    action: fan.turn_off
+                                    data:
+                                      entity_id: ${fan_ceiling}
+              - obj:
+                  styles: style_device_row
+                  scrollbar_mode: "OFF"
+                  scrollable: false
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_device_cover
+                        align: LEFT_MID
+                        x: 8
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                    - label:
+                        align: LEFT_MID
+                        x: 80
+                        width: 180
+                        long_mode: DOT
+                        text: "Persiana"
+                        text_font: font_device
+                        text_color: 0x00FF00
+                    - switch:
+                        id: toggle_cover1
+                        align: RIGHT_MID
+                        x: -8
+                        width: 56
+                        height: 30
+                        bg_color: 0x153015
+                        indicator:
+                          bg_color: 0x296d29
+                          bg_opa: COVER
+                          checked:
+                            bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                        state:
+                          disabled: true
+                        # State changes vibrate on this page; only user changes send HA actions.
+                        on_value:
+                          - if:
+                              condition:
+                                and:
+                                  - lvgl.page.is_showing: page_devices
+                                  - lambda: return !id(alarm_ringing);
+                              then:
+                                - script.execute: device_toggle_feedback
+                        on_change:
+                          - if:
+                              condition:
+                                lambda: return x;
+                              then:
+                                - homeassistant.action:
+                                    action: cover.open_cover
+                                    data:
+                                      entity_id: ${cover1}
+                              else:
+                                - homeassistant.action:
+                                    action: cover.close_cover
+                                    data:
+                                      entity_id: ${cover1}
+              - obj:
+                  styles: style_device_row
+                  scrollbar_mode: "OFF"
+                  scrollable: false
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_device_climate
+                        align: LEFT_MID
+                        x: 8
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                    - label:
+                        align: LEFT_MID
+                        x: 80
+                        width: 180
+                        long_mode: DOT
+                        text: "Calefacción"
+                        text_font: font_device
+                        text_color: 0x00FF00
+                    - switch:
+                        id: toggle_climate
+                        align: RIGHT_MID
+                        x: -8
+                        width: 56
+                        height: 30
+                        bg_color: 0x153015
+                        indicator:
+                          bg_color: 0x296d29
+                          bg_opa: COVER
+                          checked:
+                            bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                        state:
+                          disabled: true
+                        # State changes vibrate on this page; only user changes send HA actions.
+                        on_value:
+                          - if:
+                              condition:
+                                and:
+                                  - lvgl.page.is_showing: page_devices
+                                  - lambda: return !id(alarm_ringing);
+                              then:
+                                - script.execute: device_toggle_feedback
+                        on_change:
+                          - if:
+                              condition:
+                                lambda: return x;
+                              then:
+                                - homeassistant.action:
+                                    action: climate.turn_on
+                                    data:
+                                      entity_id: ${climate}
+                              else:
+                                - homeassistant.action:
+                                    action: climate.turn_off
+                                    data:
+                                      entity_id: ${climate}
+              - obj:
+                  styles: style_device_row
+                  scrollbar_mode: "OFF"
+                  scrollable: false
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_device_3dprinter
+                        align: LEFT_MID
+                        x: 8
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                    - label:
+                        align: LEFT_MID
+                        x: 80
+                        width: 180
+                        long_mode: DOT
+                        text: "Impresora 3D"
+                        text_font: font_device
+                        text_color: 0x00FF00
+                    - switch:
+                        id: toggle_printer_3d
+                        align: RIGHT_MID
+                        x: -8
+                        width: 56
+                        height: 30
+                        bg_color: 0x153015
+                        indicator:
+                          bg_color: 0x296d29
+                          bg_opa: COVER
+                          checked:
+                            bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                        state:
+                          disabled: true
+                        # State changes vibrate on this page; only user changes send HA actions.
+                        on_value:
+                          - if:
+                              condition:
+                                and:
+                                  - lvgl.page.is_showing: page_devices
+                                  - lambda: return !id(alarm_ringing);
+                              then:
+                                - script.execute: device_toggle_feedback
+                        on_change:
+                          - if:
+                              condition:
+                                lambda: return x;
+                              then:
+                                - homeassistant.action:
+                                    action: switch.turn_on
+                                    data:
+                                      entity_id: ${printer_3d}
+                              else:
+                                - homeassistant.action:
+                                    action: switch.turn_off
+                                    data:
+                                      entity_id: ${printer_3d}
+        - image:
+            src: icon_home
+            align: BOTTOM_MID
+            y: -25
+            image_recolor: 0x00FF00
+            image_recolor_opa: COVER
+            image_opa: 30%
+            clickable: true
+            on_click:
+              - lvgl.page.show: page_home
+
+    - id: page_settings
+      bg_color: 0x000000
+      widgets:
+        - image:
+            src: image_bg
+            image_opa: 50%
+        - label:
+            align: TOP_MID
+            y: 48
+            text: "Ajustes"
+            text_font: font_device
+            text_color: 0x00FF00
+        - obj:
+            id: settings_list
+            align: CENTER
+            width: 360
+            height: 250
+            pad_all: 0
+            bg_opa: TRANSP
+            border_width: 0
+            scrollbar_mode: "OFF"
+            scrollable: false
+            widgets:
+              - obj:
+                  styles: style_device_row
+                  align: CENTER
+                  scrollable: false
+                  scrollbar_mode: "OFF"
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_settings_vibration
+                        align: LEFT_MID
+                        x: 18
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                    - label:
+                        align: LEFT_MID
+                        x: 75
+                        width: 190
+                        text: "Vibración"
+                        text_font: font_device
+                        text_color: 0x00FF00
+                    - switch:
+                        id: toggle_settings_vibration
+                        align: RIGHT_MID
+                        x: -8
+                        width: 56
+                        height: 30
+                        bg_color: 0x153015
+                        indicator:
+                          bg_color: 0x296d29
+                          bg_opa: COVER
+                          checked:
+                            bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                        on_change:
+                          - script.execute:
+                              id: settings_set_vibration
+                              enabled: !lambda return x;
+              - obj:
+                  styles: style_device_row
+                  align: CENTER
+                  scrollable: false
+                  scrollbar_mode: "OFF"
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_settings_alarm_sound
+                        align: LEFT_MID
+                        x: 18
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                    - label:
+                        align: LEFT_MID
+                        x: 75
+                        width: 190
+                        text: "Sonido alarma"
+                        text_font: font_device
+                        text_color: 0x00FF00
+                    - switch:
+                        id: toggle_settings_alarm_sound
+                        align: RIGHT_MID
+                        x: -8
+                        width: 56
+                        height: 30
+                        bg_color: 0x153015
+                        indicator:
+                          bg_color: 0x296d29
+                          bg_opa: COVER
+                          checked:
+                            bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                        on_change:
+                          - script.execute:
+                              id: settings_set_alarm_sound
+                              enabled: !lambda return x;
+              - obj:
+                  styles: style_device_row
+                  align: CENTER
+                  scrollable: false
+                  scrollbar_mode: "OFF"
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_settings_alarm_sound
+                        align: LEFT_MID
+                        x: 18
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                        clickable: true
+                        on_click:
+                          - script.execute:
+                              id: settings_select_volume
+                              index: 2
+                    - label:
+                        align: LEFT_MID
+                        x: 75
+                        y: -14
+                        width: 175
+                        text: "Vol. altavoz"
+                        text_font: font_date
+                        text_color: 0x00FF00
+                        clickable: true
+                        on_click:
+                          - script.execute:
+                              id: settings_select_volume
+                              index: 2
+                    - label:
+                        id: lbl_settings_speaker_volume
+                        align: RIGHT_MID
+                        x: -8
+                        y: -14
+                        text: "80%"
+                        text_font: font_date
+                        text_color: 0x00FF00
+                    - slider:
+                        id: slider_settings_speaker_volume
+                        align: LEFT_MID
+                        x: 75
+                        y: 14
+                        width: 246
+                        height: 12
+                        min_value: 0
+                        max_value: 100
+                        value: 80
+                        bg_color: 0x296d29
+                        indicator:
+                          bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                          width: 16
+                          height: 16
+                        on_change:
+                          - lambda: |-
+                              id(speaker_volume_pct) = static_cast<int>(x + 0.5f);
+                          - script.execute: settings_apply_volume
+                          - script.execute: settings_refresh
+              - obj:
+                  styles: style_device_row
+                  align: CENTER
+                  scrollable: false
+                  scrollbar_mode: "OFF"
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_alarm_bell
+                        align: LEFT_MID
+                        x: 18
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                        clickable: true
+                        on_click:
+                          - script.execute:
+                              id: settings_select_volume
+                              index: 3
+                    - label:
+                        align: LEFT_MID
+                        x: 75
+                        y: -14
+                        width: 175
+                        text: "Vol. alarma"
+                        text_font: font_date
+                        text_color: 0x00FF00
+                        clickable: true
+                        on_click:
+                          - script.execute:
+                              id: settings_select_volume
+                              index: 3
+                    - label:
+                        id: lbl_settings_alarm_volume
+                        align: RIGHT_MID
+                        x: -8
+                        y: -14
+                        text: "35%"
+                        text_font: font_date
+                        text_color: 0x00FF00
+                    - slider:
+                        id: slider_settings_alarm_volume
+                        align: LEFT_MID
+                        x: 75
+                        y: 14
+                        width: 246
+                        height: 12
+                        min_value: 0
+                        max_value: 100
+                        value: 35
+                        bg_color: 0x296d29
+                        indicator:
+                          bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                          width: 16
+                          height: 16
+                        on_change:
+                          - lambda: |-
+                              id(alarm_volume_pct) = static_cast<int>(x + 0.5f);
+                          - script.execute: settings_apply_volume
+                          - script.execute: settings_refresh
+              - obj:
+                  styles: style_device_row
+                  align: CENTER
+                  scrollable: false
+                  scrollbar_mode: "OFF"
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_settings_vibration
+                        align: LEFT_MID
+                        x: 18
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                    - label:
+                        align: LEFT_MID
+                        x: 75
+                        width: 190
+                        text: "Salvapantallas"
+                        text_font: font_device
+                        text_color: 0x00FF00
+                    - switch:
+                        id: toggle_settings_screensaver
+                        align: RIGHT_MID
+                        x: -8
+                        width: 56
+                        height: 30
+                        bg_color: 0x153015
+                        indicator:
+                          bg_color: 0x296d29
+                          bg_opa: COVER
+                          checked:
+                            bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                        on_change:
+                          - lambda: |-
+                              id(screensaver_enabled) = x;
+                          - script.execute: screen_activity
+              - obj:
+                  styles: style_device_row
+                  align: CENTER
+                  scrollable: false
+                  scrollbar_mode: "OFF"
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_alarm_bell
+                        align: LEFT_MID
+                        x: 18
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                        clickable: true
+                        on_click:
+                          - script.execute:
+                              id: settings_select_volume
+                              index: 5
+                    - label:
+                        align: LEFT_MID
+                        x: 75
+                        y: -14
+                        width: 175
+                        text: "Espera pantalla"
+                        text_font: font_date
+                        text_color: 0x00FF00
+                        clickable: true
+                        on_click:
+                          - script.execute:
+                              id: settings_select_volume
+                              index: 5
+                    - label:
+                        id: lbl_settings_timeout
+                        align: RIGHT_MID
+                        x: -8
+                        y: -14
+                        text: "60 s"
+                        text_font: font_date
+                        text_color: 0x00FF00
+                    - slider:
+                        id: slider_settings_timeout
+                        align: LEFT_MID
+                        x: 75
+                        y: 14
+                        width: 246
+                        height: 12
+                        min_value: 15
+                        max_value: 300
+                        value: 60
+                        bg_color: 0x296d29
+                        indicator:
+                          bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                          width: 16
+                          height: 16
+                        on_change:
+                          - lambda: |-
+                              id(screensaver_timeout_s) = std::max(15, std::min(300, static_cast<int>(x / 15.0f + 0.5f) * 15));
+                          - script.execute: screen_activity
+                          - script.execute: settings_refresh
+              - obj:
+                  styles: style_device_row
+                  align: CENTER
+                  scrollable: false
+                  scrollbar_mode: "OFF"
+                  clickable: false
+                  widgets:
+                    - image:
+                        src: icon_settings_vibration
+                        align: LEFT_MID
+                        x: 18
+                        image_recolor: 0x00FF00
+                        image_recolor_opa: COVER
+                        clickable: true
+                        on_click:
+                          - script.execute:
+                              id: settings_select_volume
+                              index: 6
+                    - label:
+                        align: LEFT_MID
+                        x: 75
+                        y: -14
+                        width: 175
+                        text: "Pot. vibración"
+                        text_font: font_date
+                        text_color: 0x00FF00
+                        clickable: true
+                        on_click:
+                          - script.execute:
+                              id: settings_select_volume
+                              index: 6
+                    - label:
+                        id: lbl_settings_vibration_power
+                        align: RIGHT_MID
+                        x: -8
+                        y: -14
+                        text: "100%"
+                        text_font: font_date
+                        text_color: 0x00FF00
+                    - slider:
+                        id: slider_settings_vibration_power
+                        align: LEFT_MID
+                        x: 75
+                        y: 14
+                        width: 246
+                        height: 12
+                        min_value: 0
+                        max_value: 100
+                        value: 100
+                        bg_color: 0x296d29
+                        indicator:
+                          bg_color: 0x00AA00
+                        knob:
+                          bg_color: 0xCCFFCC
+                          width: 16
+                          height: 16
+                        on_change:
+                          - lambda: |-
+                              id(vibration_power_pct) = static_cast<int>(x + 0.5f);
+                          - script.execute: screen_activity
+                          - script.execute: settings_refresh
+        - image:
+            src: icon_home
+            align: BOTTOM_MID
+            y: -25
+            image_recolor: 0x00FF00
+            image_recolor_opa: COVER
+            image_opa: 30%
+            clickable: true
+            on_click:
+              - script.execute: settings_leave
+
+    - id: page_alarm
+      bg_color: 0x000000
+      widgets:
+        - image:
+            src: image_bg
+            image_opa: 50%
+        - label:
+            id: lbl_alarm_editor_title
+            align: TOP_MID
+            y: 25
+            text: "Timer"
+            text_font: font_device
+            text_color: 0x00FF00
+        - image:
+            id: img_alarm_mode_timer
+            src: icon_alarm_timer
+            align: CENTER
+            x: -40
+            y: -145
+            image_recolor: 0x00FF00
+            image_recolor_opa: COVER
+            opa: 100%
+            clickable: true
+            on_click:
+              - script.execute:
+                  id: alarm_select_mode
+                  clock_mode: 0
+        - image:
+            id: img_alarm_mode_clock
+            src: icon_alarm_clock
+            align: CENTER
+            x: 40
+            y: -145
+            image_recolor: 0x00FF00
+            image_recolor_opa: COVER
+            opa: 50%
+            clickable: true
+            on_click:
+              - script.execute:
+                  id: alarm_select_mode
+                  clock_mode: 1
+        - label:
+            align: CENTER
+            x: -105
+            y: -103
+            text: "Horas"
+            text_font: font_date
+            text_color: 0x00AA00
+            clickable: true
+            on_click:
+              - script.execute:
+                  id: alarm_focus_field
+                  field: 0
+        - roller:
+            id: roller_alarm_hours
+            align: CENTER
+            x: -105
+            y: -10
+            width: 92
+            visible_row_count: 3
+            mode: INFINITE
+            anim_duration: 150ms
+            selected_index: 0
+            text_font: font_clock
+            text_color: 0x3B793B
+            text_align: CENTER
+            text_line_space: 8
+            bg_color: 0x000000
+            bg_opa: 40%
+            border_width: 2
+            border_color: 0x00FF00
+            radius: 12
+            selected:
+              bg_color: 0x073007
+              bg_opa: COVER
+              text_color: 0x00FF00
+              text_font: font_clock
+            options:
+              - "00"
+              - "01"
+              - "02"
+              - "03"
+              - "04"
+              - "05"
+              - "06"
+              - "07"
+              - "08"
+              - "09"
+              - "10"
+              - "11"
+              - "12"
+              - "13"
+              - "14"
+              - "15"
+              - "16"
+              - "17"
+              - "18"
+              - "19"
+              - "20"
+              - "21"
+              - "22"
+              - "23"
+            on_press:
+              - script.execute:
+                  id: alarm_focus_field
+                  field: 0
+            on_change:
+              - lambda: |-
+                  id(alarm_edit_hours) = x;
+                  id(alarm_edit_field) = 0;
+                  id(alarm_message).clear();
+              - script.execute: alarm_refresh
+        - label:
+            align: CENTER
+            x: 0
+            y: -103
+            text: "Minutos"
+            text_font: font_date
+            text_color: 0x00AA00
+            clickable: true
+            on_click:
+              - script.execute:
+                  id: alarm_focus_field
+                  field: 1
+        - roller:
+            id: roller_alarm_minutes
+            align: CENTER
+            x: 0
+            y: -10
+            width: 92
+            visible_row_count: 3
+            mode: INFINITE
+            anim_duration: 150ms
+            selected_index: 5
+            text_font: font_clock
+            text_color: 0x3B793B
+            text_align: CENTER
+            text_line_space: 8
+            bg_color: 0x000000
+            bg_opa: 40%
+            border_width: 2
+            border_color: 0x125012
+            radius: 12
+            selected:
+              bg_color: 0x073007
+              bg_opa: COVER
+              text_color: 0x00FF00
+              text_font: font_clock
+            options:
+              - "00"
+              - "01"
+              - "02"
+              - "03"
+              - "04"
+              - "05"
+              - "06"
+              - "07"
+              - "08"
+              - "09"
+              - "10"
+              - "11"
+              - "12"
+              - "13"
+              - "14"
+              - "15"
+              - "16"
+              - "17"
+              - "18"
+              - "19"
+              - "20"
+              - "21"
+              - "22"
+              - "23"
+              - "24"
+              - "25"
+              - "26"
+              - "27"
+              - "28"
+              - "29"
+              - "30"
+              - "31"
+              - "32"
+              - "33"
+              - "34"
+              - "35"
+              - "36"
+              - "37"
+              - "38"
+              - "39"
+              - "40"
+              - "41"
+              - "42"
+              - "43"
+              - "44"
+              - "45"
+              - "46"
+              - "47"
+              - "48"
+              - "49"
+              - "50"
+              - "51"
+              - "52"
+              - "53"
+              - "54"
+              - "55"
+              - "56"
+              - "57"
+              - "58"
+              - "59"
+            on_press:
+              - script.execute:
+                  id: alarm_focus_field
+                  field: 1
+            on_change:
+              - lambda: |-
+                  id(alarm_edit_minutes) = x;
+                  id(alarm_edit_field) = 1;
+                  id(alarm_message).clear();
+              - script.execute: alarm_refresh
+        - label:
+            align: CENTER
+            x: 105
+            y: -103
+            text: "Segundos"
+            text_font: font_date
+            text_color: 0x00AA00
+            clickable: true
+            on_click:
+              - script.execute:
+                  id: alarm_focus_field
+                  field: 2
+        - roller:
+            id: roller_alarm_seconds
+            align: CENTER
+            x: 105
+            y: -10
+            width: 92
+            visible_row_count: 3
+            mode: INFINITE
+            anim_duration: 150ms
+            selected_index: 0
+            text_font: font_clock
+            text_color: 0x3B793B
+            text_align: CENTER
+            text_line_space: 8
+            bg_color: 0x000000
+            bg_opa: 40%
+            border_width: 2
+            border_color: 0x125012
+            radius: 12
+            selected:
+              bg_color: 0x073007
+              bg_opa: COVER
+              text_color: 0x00FF00
+              text_font: font_clock
+            options:
+              - "00"
+              - "01"
+              - "02"
+              - "03"
+              - "04"
+              - "05"
+              - "06"
+              - "07"
+              - "08"
+              - "09"
+              - "10"
+              - "11"
+              - "12"
+              - "13"
+              - "14"
+              - "15"
+              - "16"
+              - "17"
+              - "18"
+              - "19"
+              - "20"
+              - "21"
+              - "22"
+              - "23"
+              - "24"
+              - "25"
+              - "26"
+              - "27"
+              - "28"
+              - "29"
+              - "30"
+              - "31"
+              - "32"
+              - "33"
+              - "34"
+              - "35"
+              - "36"
+              - "37"
+              - "38"
+              - "39"
+              - "40"
+              - "41"
+              - "42"
+              - "43"
+              - "44"
+              - "45"
+              - "46"
+              - "47"
+              - "48"
+              - "49"
+              - "50"
+              - "51"
+              - "52"
+              - "53"
+              - "54"
+              - "55"
+              - "56"
+              - "57"
+              - "58"
+              - "59"
+            on_press:
+              - script.execute:
+                  id: alarm_focus_field
+                  field: 2
+            on_change:
+              - lambda: |-
+                  id(alarm_edit_seconds) = x;
+                  id(alarm_edit_field) = 2;
+                  id(alarm_message).clear();
+              - script.execute: alarm_refresh
+        - label:
+            id: lbl_alarm_status
+            align: CENTER
+            y: 95
+            width: 320
+            height: 44
+            text_align: CENTER
+            long_mode: WRAP
+            text: "Sin alarma activa"
+            text_font: font_date
+            text_color: 0x00FF00
+        - button:
+            id: btn_alarm_cancel
+            align: CENTER
+            y: 137
+            width: 180
+            height: 42
+            hidden: true
+            bg_color: 0x5A0000
+            border_width: 1
+            border_color: 0xFF0000
+            on_click:
+              - script.execute: alarm_cancel
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Cancelar"
+                  text_font: font_device
+                  text_color: 0xFF7777
+        - label:
+            id: lbl_alarm_controls_hint
+            align: CENTER
+            y: 137
+            text: "Mantén izq. para iniciar\nMantén der. para cancelar"
+            text_align: CENTER
+            text_font: font_date
+            text_color: 0x3B793B
+        - image:
+            src: icon_home
+            align: BOTTOM_MID
+            y: -25
+            image_recolor: 0x00FF00
+            image_recolor_opa: COVER
+            image_opa: 30%
+            clickable: true
+            on_click:
+              - lvgl.page.show: page_home
+
+    - id: page_alarm_ringing
+      bg_color: 0x000000
+      widgets:
+        - image:
+            src: icon_alarm_bell_large
+            align: CENTER
+            y: -110
+            image_recolor: 0xFF0000
+            image_recolor_opa: COVER
+        - label:
+            id: lbl_alarm_alert
+            align: CENTER
+            y: -35
+            width: 340
+            text_align: CENTER
+            long_mode: WRAP
+            text: "Alarma"
+            text_font: font_device
+            text_color: 0xFF0000
+        - label:
+            align: CENTER
+            y: 15
+            text: "Pulsa para silenciar y cancelar"
+            text_font: font_date
+            text_color: 0xFF0000
+        - button:
+            align: CENTER
+            x: 0
+            y: 85
+            width: 210
+            height: 60
+            bg_color: 0x5A0000
+            border_width: 1
+            border_color: 0xFF0000
+            on_click:
+              - script.execute: alarm_cancel
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Detener"
+                  text_font: font_date
+                  text_color: 0xFF0000
+
+    - id: page_assist
+      bg_color: 0x000000
+      widgets:
+        - image:
+            src: image_bg
+            x: 0
+            y: 0
+            image_opa: 0.5
+        - obj:
+            id: dragon_ball_assist
+            styles: style_big_dragon_ball
+            align: center
+            scrollbar_mode: "OFF"
+        - image:
+            id: img_assist_status
+            src: image_assist
+            align: center
+            translate_y: -10
+        - button:
+            id: btn_assist_cancel
+            align: BOTTOM_MID
+            y: -35
+            width: 180
+            height: 48
+            bg_color: 0x073007
+            border_width: 1
+            border_color: 0x00FF00
+            on_click:
+              - script.execute: assist_cancel
+            widgets:
+              - label:
+                  align: CENTER
+                  text: "Cancelar"
+                  text_font: font_device
+                  text_color: 0x00FF00
+
+
+interval:
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              if (id(alarm_ringing) || id(alarm_mode) == 0) return false;
+              if (id(alarm_mode) == 1)
+                return static_cast<int32_t>(millis() - id(alarm_deadline_ms)) >= 0;
+              const auto now = id(esptime).now();
+              return now.is_valid() && now.timestamp >= id(alarm_target_epoch);
+          then:
+            - script.execute: alarm_fire
+      - script.execute: alarm_refresh
+
+  - interval: 1s
+    then:
+      - if:
+          condition:
+            lambda: |-
+              if (!id(screensaver_enabled) || !id(screen_enabled) || id(alarm_ringing) ||
+                  id(home_assistant_voice).is_running() || id(button_a).state || id(button_b).state)
+                return false;
+              #if LVGL_VERSION_MAJOR >= 9
+              const uint32_t idle_ms = lv_display_get_inactive_time(nullptr);
+              #else
+              const uint32_t idle_ms = lv_disp_get_inactive_time(nullptr);
+              #endif
+              return idle_ms >= static_cast<uint32_t>(id(screensaver_timeout_s)) * 1000U;
+          then:
+            - lambda: |-
+                id(screensaver_sleeping) = true;
+            - switch.turn_off: stopwatch_screen
+
+  - interval: 2500ms
+    then:
+      - lvgl.widget.update:
+          id: group_simbols
+          opa: 60%
+      - delay: 700ms
+      - lvgl.widget.update:
+          id: group_simbols
+          opa: 0%
+      - delay: 2000ms
